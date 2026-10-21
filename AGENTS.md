@@ -1,5 +1,9 @@
 # Mural agent instructions
 
+## Project map
+
+See [.agents/PROJECT_KNOWLEDGE.md](.agents/PROJECT_KNOWLEDGE.md) for the repository architecture, code entry points, workflows, data boundaries, and known documentation drift. Check current source and runtime configuration when behavior or deployment status matters.
+
 ## Start from current main
 
 At the start of each Mural coding task, fetch `origin/main` and base new branch work on that revision. Before opening a PR or marking one ready for review, fetch `origin/main` again, integrate any new commits into the working branch, resolve conflicts, and run the affected checks. Check once more for a newer `main` before merging. Preserve uncommitted and untracked work when updating a checkout; use an isolated worktree when that work would be at risk.
