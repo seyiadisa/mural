@@ -13,6 +13,10 @@ Mural is a native iPhone and Android app for learning through conversation. Spea
 
 Built with SwiftUI and Liquid Glass on iPhone, and Jetpack Compose on Android. Learning records stay on your device. This version connects directly to OpenAI using your own API key. It needs an internet connection, but no Mural account or running Mac.
 
+## Self-hosted web app
+
+A separate responsive web client is available in [`apps/web/`](apps/web/) for a private, owner-only Mural instance. It supports typed practice, optional live voice, conversation history, saved words, and portable web archives. Follow the [self-hosting guide](docs/web-app.md) for Docker Compose setup, Google sign-in, optional ChatGPT-plan access, compatible text providers, and voice configuration.
+
 ## Android
 
 A native Android client is available in [`apps/android/`](apps/android/README.md), with voice and written conversation, the same eleven language modules, local learning records and iPhone-compatible JSON backups. Its interface is English, and Spanish on a phone set to Spanish. It runs on Android 8.0 or later and supports Mural minutes or your own OpenAI API key stored with Android Keystore. The iPhone client remains available below.
@@ -91,15 +95,15 @@ On iPhone, Mandarin includes optional pinyin in Talk, transcripts and word detai
 
 ## Privacy and API costs
 
-Mural stores conversations, vocabulary and preferences on your device. There is no Mural cloud sync, analytics SDK or advertising. The optional iPhone account feature stores signup data on the account service; conversations and vocabulary stay local. Your API key is stored in the device’s Keychain, excluded from learning exports, and sent only to OpenAI.
+The native apps store conversations, vocabulary and preferences on your device; they do not sync learning records to the account service. The self-hosted web app stores its own history, vocabulary and preferences in the operator's PostgreSQL database. There is no analytics SDK or advertising. Native API keys stay in Keychain/Android Keystore and are excluded from learning exports. Web provider credentials are encrypted by the self-hosted server and are never sent to the browser.
 
 During practice, audio, selected conversation text, learning context and requested searches go to OpenAI. Mural does not save raw audio. API requests set `store: false` where supported, but that does not disable all provider retention; OpenAI’s abuse-monitoring rules and your project’s settings still apply. [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data)
 
-OpenAI bills your project for voice, text and search. The app’s usage display is an estimate, and its conversation time limit is not a billing cap. Check your OpenAI project’s usage and spending settings.
+OpenAI bills your project for native-app voice, text and search. The native app’s usage display is an estimate, and its conversation time limit is not a billing cap. The self-hosted web voice allowance is capped at $10 of estimated usage per UTC month using the checked-in duration rate; this is an app-side estimate, not an OpenAI billing limit. Check the provider account's usage and spending settings.
 
 ## Planned public service
 
-Hosted free conversations and minute purchases are **not active**. Optional Google sign-in exists on iPhone; Android account integration is in progress. The [API foundation](services/api/README.md) contains identity verification, audited minute allowances and guest transfers, plus the earlier sandbox payment support. [Minute controls](docs/conversation-minutes.md) describe what is implemented and what remains disabled. Its runbook lists the remaining work before commercial activation. No shared provider key belongs in this repository or a distributed app binary.
+Hosted free conversations and minute purchases for the public native-app service are **not active**. Optional Google sign-in exists on iPhone; Android account integration is in progress. The [API foundation](services/api/README.md) contains identity verification, audited minute allowances and guest transfers, plus the earlier sandbox payment support. [Minute controls](docs/conversation-minutes.md) describe what is implemented and what remains disabled. Its runbook lists the remaining work before commercial activation. The private web deployment has its own owner-only configuration; no shared provider key belongs in this repository or a distributed app binary.
 
 A public TestFlight link and App Store listing are not yet available. [Release preparation](release/README.md) records the outstanding requirements.
 
