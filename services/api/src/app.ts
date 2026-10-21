@@ -27,6 +27,7 @@ import { HOSTED_HELPER_BODY_LIMIT, type HostedHelpers } from './hosted-helpers.j
 import { Diagnostics, errorReference } from './diagnostics.js';
 import { startupDiagnostic, type StartupDiagnostic } from './startup-diagnostics.js';
 import { WEB_PURCHASE_PATH, type WebPurchases } from './web-purchases.js';
+import { registerWebRoutes } from './web-routes.js';
 
 declare module 'fastify' {
   interface FastifyContextConfig { rateLimit?: { max: number; timeWindow: number } }
@@ -39,8 +40,9 @@ export interface Services { diagnostics?: Diagnostics; db: Database; auth: AuthC
   minuteCommerce?: { purchases: MinutePurchases; aiPurchases?: AIValuePurchases; fulfillment?: PurchaseFulfillmentRouter;
     stripe?: StripeMinuteProvider; play?: PlayMinuteProvider; apple?:AppleMinuteProvider; appleSandbox?:AppleMinuteProvider;
     appleScopes?:ApplePurchaseScopes; playNotifications?: Pick<PlayRtdnSubscriber,'isOperational'> };
+  web?: { ownerEmail?: string; origin: string };
   accounts?: { admission: AuthAdmission; identityVerifier?: typeof verifyIdentity } }
-const accountPaths = new Set(['/v1/auth/challenge', '/v1/auth/exchange', '/v1/auth/sign-out', '/v1/account', '/v1/wallet', '/v1/minutes/welcome', '/v1/minutes/link-guest',
+const accountPaths = new Set(['/v1/auth/challenge', '/v1/auth/exchange', '/v1/auth/sign-out', '/v1/web/auth/challenge', '/v1/web/auth/exchange', '/v1/web/auth/sign-out', '/v1/account', '/v1/wallet', '/v1/minutes/welcome', '/v1/minutes/link-guest',
   '/v1/account/connect-google',
   '/v1/minutes/orders', '/v1/minutes/orders/by-key/:key', '/v1/minutes/orders/:id', '/v1/minutes/orders/:id/play', '/v1/minutes/play/recover','/v1/minutes/orders/:id/apple','/v1/minutes/apple/recover']);
 const paymentReadOptions = { config: { rateLimit: { max: 120, timeWindow: 60_000 } } };
@@ -144,7 +146,7 @@ export function createApp(services: Services) {
     if (accountPaths.has(path)) {
       if (!services.accounts || (!hasGoogleSignIn(services.auth) && !(services.auth.appleClientID && services.appleRevoker))) throw new ServiceError('accounts_unavailable', 503);
       try {
-        await services.accounts.admission.enter(path === '/v1/auth/challenge' ? 'challenge' : path === '/v1/auth/exchange' ? 'exchange' : 'account',
+        await services.accounts.admission.enter(path.endsWith('/challenge') ? 'challenge' : path.endsWith('/exchange') ? 'exchange' : 'account',
           request.headers, request.raw.socket.remoteAddress ?? request.ip);
       } catch (error) {
         if (error instanceof ServiceError) { if (error.status === 429) reply.header('Retry-After', '3600'); throw error; }
@@ -181,7 +183,7 @@ export function createApp(services: Services) {
   });
   app.setNotFoundHandler(() => { throw new ServiceError('not_found', 404); });
   const featureState=()=>{
-    const hostedVoice=Boolean(services.hosted?.available && (!services.hosted.minuteFunded || services.hostedHelpers));
+    const hostedVoice=Boolean(services.hosted?.available && (!services.hosted.minuteFunded || services.hostedHelpers || services.hosted.publicMinuteAccess));
     const livePayments=['stripe','play','apple'].some(provider=>services.minuteCommerce?.aiPurchases?.products(provider as 'stripe'|'play'|'apple').some(product=>product.environment==='live'));
     return {hostedVoice,guestMinutes:Boolean(hostedVoice && services.hosted?.publicMinuteAccess && services.guestMinuteAttestor),livePayments};
   };
@@ -636,6 +638,8 @@ export function createApp(services: Services) {
       return reply;
     }
   });
+  registerWebRoutes(app, { db, auth: services.auth, ownerEmail: services.web?.ownerEmail, origin: services.web?.origin ?? 'http://localhost:8080',
+    identityVerifier: services.accounts?.identityVerifier, hosted: services.hosted });
   app.get('/payment-return', async (_request, reply) => reply.type('text/html').send('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Mural sandbox</title><body><h1>Return to Mural</h1><p>This is a sandbox payment test. The app checks payment confirmation independently.</p></body></html>'));
   return app;
 }

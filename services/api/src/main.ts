@@ -63,7 +63,7 @@ try {
   if (process.env.HOSTED_HELPERS_EXPERIMENTAL === 'true' &&
     (process.env.HOSTED_VOICE_EXPERIMENTAL !== 'true' || process.env.HOSTED_VOICE_BILLING_UNIT !== 'milliseconds'))
     throw new Error('Hosted helpers require minute-funded voice.');
-  if (process.env.HOSTED_VOICE_EXPERIMENTAL === 'true') {
+  if (process.env.HOSTED_VOICE_EXPERIMENTAL === 'true' && process.env.OPENAI_API_KEY) {
     const billingUnit = process.env.HOSTED_VOICE_BILLING_UNIT ?? 'nanoUSD';
     if (billingUnit !== 'nanoUSD' && billingUnit !== 'milliseconds') throw new Error('Invalid hosted billing unit.');
     const accounts = new Set((process.env.HOSTED_VOICE_ACCOUNT_ALLOWLIST ?? '').split(',').filter(Boolean));
@@ -81,13 +81,13 @@ try {
       });
       await hostedHelpers.expireBudgets();
     }
-    hosted = new HostedVoice(db, new OpenAILiveProvider(process.env.OPENAI_API_KEY ?? '', { diagnostics }),
+    hosted = new HostedVoice(db, new OpenAILiveProvider(process.env.OPENAI_API_KEY, { diagnostics, model: process.env.MURAL_LIVE_MODEL }),
       { accountAllowlist: accounts, billingUnit, lifetimeFundingCapNano,publicMinuteAccess,publicPaidAccess, helpers: hostedHelpers,
         restrictToAllowlist:deploymentEnvironment==='test',
         maximumSessionMilliseconds:deploymentEnvironment==='test'?60_000:undefined,
         diagnostics });
     await hosted.start();
-  }
+  } else if (process.env.HOSTED_VOICE_EXPERIMENTAL === 'true') diagnostics.record('feature_unavailable', { operation: 'voice.provider_configuration' });
   const accessConfig = accessRequestConfig(process.env);
   const accessRequests = accessConfig ? new AccessRequests(db, accessConfig) : undefined;
   const accountsConfig = accountAdmissionConfig(process.env);
@@ -119,9 +119,17 @@ try {
     throw new Error('iOS Google identity configuration is invalid.');
   if (accounts && !hasGoogleSignIn({ googleClientID: process.env.GOOGLE_CLIENT_ID, googleIOSClientIDs, googleAndroidServerClientID, googleAndroidClientIDs }) &&
     !(appleClient && appleRevoker)) throw new Error('No account identity provider configured.');
+  const webOrigin = process.env.MURAL_WEB_ORIGIN ?? origin.origin;
+  let normalizedWebOrigin: string;
+  try { const parsed = new URL(webOrigin); if (parsed.origin !== webOrigin || (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(parsed.hostname)))) throw new Error(); normalizedWebOrigin = parsed.origin; }
+  catch { throw new Error('Invalid MURAL_WEB_ORIGIN.'); }
+  if (process.env.MURAL_SECRETS_ENCRYPTION_KEY && !/^[a-f0-9]{64}$/i.test(process.env.MURAL_SECRETS_ENCRYPTION_KEY))
+    throw new Error('MURAL_SECRETS_ENCRYPTION_KEY must contain 32 bytes as hexadecimal.');
+  const webOwnerEmail = process.env.MURAL_WEB_OWNER_EMAIL?.trim().toLowerCase();
+  if (webOwnerEmail && !/^[^\s@\x00-\x1f\x7f]+@[^\s@\x00-\x1f\x7f]+$/.test(webOwnerEmail)) throw new Error('Invalid MURAL_WEB_OWNER_EMAIL.');
   const app = createApp({ db, auth: { googleClientID: process.env.GOOGLE_CLIENT_ID, googleIOSClientIDs, appleClientID: appleClient,
     googleAndroidServerClientID, googleAndroidClientIDs }, payments, appleRevoker, hosted, hostedHelpers,
-    minuteCommerce, accessRequests, accounts, aiReports,guestMinuteAttestor,webPurchases,
+    minuteCommerce, accessRequests, accounts, aiReports,guestMinuteAttestor,webPurchases,web:{ownerEmail:webOwnerEmail,origin:normalizedWebOrigin},
     diagnostics });
   const cleanup = setInterval(() => {
     void pruneAuthenticationRecords(db).catch(error => { diagnostics.record('background_failed', { operation: 'retention.accounts' }, error); });

@@ -4,7 +4,7 @@ import { diagnosticErrorCodes } from './diagnostic-error-codes.js';
 
 export type DiagnosticEvent = 'request_completed' | 'request_failed' | 'provider_completed' | 'provider_failed' |
   'voice_active' | 'voice_close_requested' | 'voice_closed' | 'voice_connection_lost' |
-  'voice_watchdog_failed' | 'voice_hangup_failed' | 'background_failed' | 'service_started' | 'service_failed' | 'apple_catalog';
+  'voice_watchdog_failed' | 'voice_hangup_failed' | 'background_failed' | 'service_started' | 'service_failed' | 'apple_catalog' | 'feature_unavailable';
 export interface DiagnosticFields {
   operation?: string; reference?: string; sessionReference?: string;
   status?: number; durationMilliseconds?: number; providerStatus?: number; providerRequestID?: string;
