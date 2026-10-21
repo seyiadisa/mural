@@ -1,0 +1,116 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: mural
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/invoker-iam-disabled: "__PUBLIC__"
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "1"
+        run.googleapis.com/cpu-throttling: "true"
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/container-dependencies: '{"edge":["api","web"]}'
+        run.googleapis.com/secrets: 'mural-neon-pooled-url:projects/__PROJECT_NUMBER__/secrets/mural-neon-pooled-url,mural-accounts-hmac-key:projects/__PROJECT_NUMBER__/secrets/mural-accounts-hmac-key,mural-accounts-proxy-token:projects/__PROJECT_NUMBER__/secrets/mural-accounts-proxy-token,mural-web-encryption-key:projects/__PROJECT_NUMBER__/secrets/mural-web-encryption-key'
+    spec:
+      serviceAccountName: mural-runtime@__PROJECT_ID__.iam.gserviceaccount.com
+      containerConcurrency: 20
+      timeoutSeconds: 300
+      containers:
+        - name: edge
+          image: __REGION__-docker.pkg.dev/__PROJECT_ID__/mural/edge:__TAG__
+          ports:
+            - name: http1
+              containerPort: 8080
+          env:
+            - name: ACCOUNTS_PROXY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: "1"
+                  name: mural-accounts-proxy-token
+          resources:
+            limits:
+              cpu: "0.25"
+              memory: 512Mi
+        - name: api
+          image: __REGION__-docker.pkg.dev/__PROJECT_ID__/mural/api:__TAG__
+          env:
+            - name: PORT
+              value: "8081"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  key: "1"
+                  name: mural-neon-pooled-url
+            - name: PUBLIC_ORIGIN
+              value: __WEB_ORIGIN__
+            - name: MURAL_WEB_ORIGIN
+              value: __WEB_ORIGIN__
+            - name: MURAL_WEB_OWNER_EMAIL
+              value: __OWNER_EMAIL__
+            - name: GOOGLE_CLIENT_ID
+              value: __GOOGLE_CLIENT_ID__
+            - name: ACCOUNTS_ENABLED
+              value: "true"
+            - name: ACCOUNTS_HMAC_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: "1"
+                  name: mural-accounts-hmac-key
+            - name: ACCOUNTS_PROXY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: "1"
+                  name: mural-accounts-proxy-token
+            - name: ACCOUNTS_ALLOW_LOCAL_LOOPBACK
+              value: "false"
+            - name: MURAL_SECRETS_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: "1"
+                  name: mural-web-encryption-key
+            - name: HOSTED_VOICE_EXPERIMENTAL
+              value: "false"
+            - name: HOSTED_VOICE_ACCESS
+              value: restricted-test
+            - name: HOSTED_VOICE_BILLING_UNIT
+              value: milliseconds
+            - name: HOSTED_VOICE_LIFETIME_CAP_NANO
+              value: "0"
+            - name: HOSTED_HELPERS_EXPERIMENTAL
+              value: "false"
+            - name: MURAL_LIVE_MODEL
+              value: gpt-live-1
+            - name: MURAL_MINUTE_STRIPE_QUANTITY_ENABLED
+              value: "false"
+            - name: MURAL_MINUTE_APPLE_QUANTITY_ENABLED
+              value: "false"
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 0
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 60
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+        - name: web
+          image: __REGION__-docker.pkg.dev/__PROJECT_ID__/mural/web:__TAG__
+          startupProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 0
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 30
+          resources:
+            limits:
+              cpu: "0.25"
+              memory: 512Mi

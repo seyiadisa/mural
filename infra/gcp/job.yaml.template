@@ -1,0 +1,30 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: mural-migrate
+spec:
+  taskCount: 1
+  parallelism: 1
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/secrets: 'mural-neon-direct-url:projects/__PROJECT_NUMBER__/secrets/mural-neon-direct-url'
+    spec:
+      template:
+        spec:
+          maxRetries: 0
+          timeoutSeconds: 900
+          serviceAccountName: mural-migration@__PROJECT_ID__.iam.gserviceaccount.com
+          containers:
+            - image: __REGION__-docker.pkg.dev/__PROJECT_ID__/mural/api:__TAG__
+              command: [node, dist/src/migrate.js]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      key: "1"
+                      name: mural-neon-direct-url
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi

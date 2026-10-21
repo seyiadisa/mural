@@ -1,0 +1,42 @@
+substitutions:
+  _REGION: us-central1
+  _TAG: manual
+  _GOOGLE_CLIENT_ID: ""
+
+steps:
+  - id: build-api
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/mural/api:${_TAG}
+      - --file
+      - services/api/Dockerfile
+      - services/api
+
+  - id: build-web
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/mural/web:${_TAG}
+      - --build-arg
+      - VITE_GOOGLE_CLIENT_ID=${_GOOGLE_CLIENT_ID}
+      - --file
+      - apps/web/Dockerfile
+      - .
+
+  - id: build-edge
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/mural/edge:${_TAG}
+      - --file
+      - infra/gcp/Caddy.Dockerfile
+      - .
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/mural/api:${_TAG}
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/mural/web:${_TAG}
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/mural/edge:${_TAG}

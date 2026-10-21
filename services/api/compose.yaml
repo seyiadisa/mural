@@ -30,12 +30,26 @@ services:
     build: .
     environment:
       DATABASE_URL: postgresql://mural:${POSTGRES_PASSWORD}@database:5432/mural
-      PUBLIC_ORIGIN: https://${API_DOMAIN:?Set the API domain}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      PUBLIC_ORIGIN: https://${API_DOMAIN:?Set the web app domain}
+      MURAL_WEB_ORIGIN: https://${API_DOMAIN}
+      MURAL_WEB_OWNER_EMAIL: ${MURAL_WEB_OWNER_EMAIL:?Set the owner Google email}
+      MURAL_SECRETS_ENCRYPTION_KEY: ${MURAL_SECRETS_ENCRYPTION_KEY:?Set a 32-byte encryption key}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set a Google web OAuth client ID}
       GOOGLE_IOS_CLIENT_IDS: ${GOOGLE_IOS_CLIENT_IDS:-}
       GOOGLE_ANDROID_SERVER_CLIENT_ID: ${GOOGLE_ANDROID_SERVER_CLIENT_ID:-}
       GOOGLE_ANDROID_CLIENT_IDS: ${GOOGLE_ANDROID_CLIENT_IDS:-}
       APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+      ACCOUNTS_ENABLED: "true"
+      ACCOUNTS_HMAC_KEY: ${ACCOUNTS_HMAC_KEY:?Set a random 32-byte hex secret}
+      ACCOUNTS_PROXY_TOKEN: ${ACCOUNTS_PROXY_TOKEN:?Set a different random 32-byte hex secret}
+      ACCOUNTS_ALLOW_LOCAL_LOOPBACK: "false"
+      HOSTED_VOICE_EXPERIMENTAL: ${HOSTED_VOICE_EXPERIMENTAL:-true}
+      HOSTED_VOICE_ACCESS: ${HOSTED_VOICE_ACCESS:-public-minutes}
+      HOSTED_VOICE_BILLING_UNIT: ${HOSTED_VOICE_BILLING_UNIT:-milliseconds}
+      HOSTED_VOICE_LIFETIME_CAP_NANO: "0"
+      HOSTED_HELPERS_EXPERIMENTAL: "false"
+      MURAL_LIVE_MODEL: ${MURAL_LIVE_MODEL:-gpt-live-1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MURAL_MINUTE_STRIPE_QUANTITY_ENABLED: ${MURAL_MINUTE_STRIPE_QUANTITY_ENABLED:-false}
       MURAL_MINUTE_APPLE_QUANTITY_ENABLED: ${MURAL_MINUTE_APPLE_QUANTITY_ENABLED:-false}
       STRIPE_TEST_SECRET_KEY: ${STRIPE_TEST_SECRET_KEY:-}
@@ -57,16 +71,30 @@ services:
     tmpfs: [/tmp]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+    depends_on: [api]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    restart: unless-stopped
   caddy:
     image: caddy:2-alpine
     environment:
       API_DOMAIN: ${API_DOMAIN}
+      ACCOUNTS_PROXY_TOKEN: ${ACCOUNTS_PROXY_TOKEN}
     ports: ["80:80", "443:443", "443:443/udp"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    depends_on: [api]
+    depends_on: [api, web]
     logging:
       driver: json-file
       options:
