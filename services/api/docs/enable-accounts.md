@@ -91,7 +91,7 @@ Pass `ACCOUNTS_PROXY_TOKEN` into the Caddy container too. Caddy must overwrite b
 
 ## Verify the deployment
 
-1. Run `npm run check` and the isolated PostgreSQL integration suite. The signed-token HTTP fixtures verify signature handling and durable state without calling Google or Apple.
+1. Run `pnpm run check` and the isolated PostgreSQL integration suite. The signed-token HTTP fixtures verify signature handling and durable state without calling Google or Apple.
 2. Start the API under the restricted runtime role. Confirm `/healthz` and `/readyz`, then `/v1/auth/providers` returns Google true and Apple false. Check that startup retention cleanup succeeds.
 3. POST an empty JSON object to `/v1/auth/challenge`. Validate its response privately without recording the nonce. A malformed exchange must fail without adding account or identity records. Confirm disallowed commercial routes retain their public gate.
 4. On a configured test user's iPhone, complete real Google authorization and fetch `/v1/account`. Privately verify that the account ID matches the native session and that exactly one account, identity and empty wallet exist. Keep tokens and email out of logs or shared evidence.

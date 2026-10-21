@@ -6,12 +6,13 @@ Consumer pricing is moving to **conversation minutes**. The time ledger, configu
 
 ## Run locally
 
-Use Node.js 22.19 or later, npm, and a separate PostgreSQL database. PostgreSQL 14 was used for the integration tests; the deployment configuration uses PostgreSQL 17.
+Use Node.js 22.19 or later, Corepack with pnpm 11.21.0, and a separate PostgreSQL database. PostgreSQL 14 was used for the integration tests; the deployment configuration uses PostgreSQL 17.
 
 From this directory:
 
 ```sh
-npm ci
+corepack enable
+pnpm install --frozen-lockfile
 cp .env.example .env
 ```
 
@@ -20,8 +21,8 @@ Set `DATABASE_URL` in `.env` to a database reserved for Mural. Keep `.env` priva
 Apply the schema and start the development server:
 
 ```sh
-npm run migrate
-npm run dev
+pnpm run migrate
+pnpm run dev
 ```
 
 Open `http://localhost:8080/healthz`. A successful response identifies this as `commercial-foundation` with `hostedVoice: false` and `livePayments: false`. `/readyz` also checks the database.
@@ -29,8 +30,8 @@ Open `http://localhost:8080/healthz`. A successful response identifies this as `
 For a compiled local run:
 
 ```sh
-npm run build
-npm start
+pnpm run build
+pnpm start
 ```
 
 ## Run tests
@@ -38,13 +39,13 @@ npm start
 Run the unit and HTTP boundary tests with:
 
 ```sh
-npm test
+pnpm test
 ```
 
-For the full suite, set `TEST_DATABASE_URL` to an **isolated test database whose name ends in `_test`**, then run `npm test`. The integration suite applies migrations and adds synthetic test accounts, purchases, and usage. It never invokes OpenAI, Google, Apple, or Stripe servers. Ledger tests retain synthetic rows; voice tests create and remove isolated PostgreSQL schemas.
+For the full suite, set `TEST_DATABASE_URL` to an **isolated test database whose name ends in `_test`**, then run `pnpm test`. The integration suite applies migrations and adds synthetic test accounts, purchases, and usage. It never invokes OpenAI, Google, Apple, or Stripe servers. Ledger tests retain synthetic rows; voice tests create and remove isolated PostgreSQL schemas.
 
 ```sh
-TEST_DATABASE_URL=postgresql://mural_test@127.0.0.1:55434/mural_billing_test npm test
+TEST_DATABASE_URL=postgresql://mural_test@127.0.0.1:55434/mural_billing_test pnpm test
 ```
 
 The URL above is an example for an already-running local test database. Do not use a production database. Without `TEST_DATABASE_URL`, PostgreSQL tests are explicitly skipped.

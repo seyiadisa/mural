@@ -45,4 +45,4 @@ Deploy the API before publishing the website. Keep the existing live Stripe cata
 
 ## Tests
 
-Run `npm run check`, `npm run build` and the full API suite with the dedicated PostgreSQL test URL. `tests/web-purchases.test.ts` covers account ambiguity, both relay domains, code/session expiry and replay, durable quotas and delivery, real runtime privileges, browser-origin/proxy rejection, immutable ownership, fake signed Stripe fulfillment, duplicate credit and refunds. Tests use synthetic email and payment transports. Website unit/browser tests live in the separate website repository.
+Run `pnpm run check`, `pnpm run build` and the full API suite with the dedicated PostgreSQL test URL. `tests/web-purchases.test.ts` covers account ambiguity, both relay domains, code/session expiry and replay, durable quotas and delivery, real runtime privileges, browser-origin/proxy rejection, immutable ownership, fake signed Stripe fulfillment, duplicate credit and refunds. Tests use synthetic email and payment transports. Website unit/browser tests live in the separate website repository.
