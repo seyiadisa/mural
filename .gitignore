@@ -30,8 +30,60 @@ marketing/screenshots/*.zip
 marketing/demo/
 .swiftpm/
 node_modules/
+siwc-credentials*.json
+
+# JavaScript/TypeScript build output and local tooling caches
+**/dist/
+**/build/
+**/coverage/
+**/.nyc_output/
+**/.vite/
+**/.turbo/
+**/.cache/
+*.tsbuildinfo
+*.log
+*.log.*
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+bun-debug.log*
+
+# Python virtual environments, bytecode, and test/lint caches
+.venv/
+venv/
+ENV/
+env/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Local runtime data and cloud credentials
+*.sqlite
+*.sqlite3
+*.db
+application_default_credentials.json
+*service-account*.json
+*.pem
+*.key
+*.ppk
+
+# Operating system and editor artifacts
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.AppleDouble
+.LSOverride
+.idea/
+*.swp
+*.swo
+*~
 
 # Android local tooling, build outputs and private signing material
 apps/android/.gradle/
