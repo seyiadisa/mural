@@ -3,10 +3,10 @@ services:
     name: mural
     runtime: docker
     plan: free
-    # Set this before the first sync to a Render region close to Neon. Omitted means Oregon.
-    # Render does not allow changing a service's region after creation.
+    # Neon is in AWS eu-central-1 (Frankfurt); keep the service co-located with it.
     dockerfilePath: ./infra/render/Dockerfile
     dockerContext: .
+    region: frankfurt
     healthCheckPath: /healthz
     envVars:
       - key: GOOGLE_CLIENT_ID

@@ -9,7 +9,7 @@ The Render deployment is one Docker Web Service. Caddy serves the React app and 
 ### Before creating the Render service
 
 1. Create a Neon project and dedicated database. Save both connection strings privately: use the **pooled** URL (host includes `-pooler`) for `DATABASE_URL`, and the **direct** URL for `MURAL_MIGRATION_DATABASE_URL`. Both should require TLS. See [Neon's connection pooling guide](https://neon.com/docs/connect/connection-pooling).
-2. Choose a Render region close to Neon. Render defaults to Oregon when no region is specified, and a service's region cannot be changed after creation; set `region` in `render.yaml` before the first Blueprint sync.
+2. Neon is in AWS `eu-central-1` (Frankfurt); `render.yaml` sets the Render service region to `frankfurt` to keep the app close to the database. Render does not allow changing a service's region after creation, so keep this setting for the first Blueprint sync.
 3. Create a Google OAuth client of type **Web application**. Add the Render service URL as an authorized JavaScript origin after the first deploy.
 4. Pick the exact Google email that will own the Mural account.
 5. Connect your GitHub account to Render and create a Blueprint from this repository's `render.yaml`. The Blueprint asks for private values instead of storing them in Git. Keep these values private.

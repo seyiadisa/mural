@@ -9,14 +9,14 @@
 ## Current State
 - Render project: `Mural` (`prj-dbec94gm7kps73de22c0`); Production environment: `evm-dbec94gm7kps73de22cg`.
 - Render CLI confirms Production has no services or environment groups. No service or deployment has been created.
-- `render.yaml` passes live Blueprint validation. Region is not specified; choose one close to Neon before creating the service, because Render does not allow a service region change later.
+- `render.yaml` passes live Blueprint validation and pins Render to Frankfurt to match Neon `eu-central-1`; this is set before service creation because Render does not allow changing a service's region later.
 - No Neon URLs, Google Web client ID, owner email, or app secrets are available in this checkout or Render Production.
 - The local Docker build used `VITE_GOOGLE_CLIENT_ID=render-verification-placeholder`; do not deploy that verification image. Render must build the source with the real OAuth client ID.
 - Hosted voice remains off (`HOSTED_VOICE_EXPERIMENTAL=false`, cap `0`); GPT-Live credentials are not needed for this deployment.
 
 ## Next Task
 - Configure the Neon pooled/direct URLs, Google Web client ID, owner email, and three separate 64-character hex secrets directly in Render. Do not put secrets in chat or Git.
-- Set `region` in `render.yaml` to match the chosen Neon region before first Blueprint sync. Create/sync the Blueprint in Mural Production, deploy, then verify `/healthz`, `/readyz`, owner sign-in, and sanitized logs.
+- Create/sync the Blueprint in Mural Production, deploy, then verify `/healthz`, `/readyz`, owner sign-in, and sanitized logs.
 - After owner Google sign-in, import SIWC credentials from the laptop using the `web-admin` command documented in `docs/web-app.md`.
 
 ## Open Issues
