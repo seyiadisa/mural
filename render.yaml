@@ -1,0 +1,60 @@
+services:
+  - type: web
+    name: mural
+    runtime: docker
+    plan: free
+    # Set this before the first sync to a Render region close to Neon. Omitted means Oregon.
+    # Render does not allow changing a service's region after creation.
+    dockerfilePath: ./infra/render/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: VITE_GOOGLE_CLIENT_ID
+        fromService:
+          name: mural
+          type: web
+          envVarKey: GOOGLE_CLIENT_ID
+      - key: MURAL_WEB_OWNER_EMAIL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: MURAL_MIGRATION_DATABASE_URL
+        sync: false
+      - key: MURAL_SECRETS_ENCRYPTION_KEY
+        sync: false
+      - key: ACCOUNTS_HMAC_KEY
+        sync: false
+      - key: ACCOUNTS_PROXY_TOKEN
+        sync: false
+      - key: PUBLIC_ORIGIN
+        fromService:
+          name: mural
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: MURAL_WEB_ORIGIN
+        fromService:
+          name: mural
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: ACCOUNTS_ENABLED
+        value: "true"
+      - key: ACCOUNTS_ALLOW_LOCAL_LOOPBACK
+        value: "false"
+      - key: HOSTED_VOICE_EXPERIMENTAL
+        value: "false"
+      - key: HOSTED_VOICE_ACCESS
+        value: restricted-test
+      - key: HOSTED_VOICE_BILLING_UNIT
+        value: milliseconds
+      - key: HOSTED_VOICE_LIFETIME_CAP_NANO
+        value: "0"
+      - key: HOSTED_HELPERS_EXPERIMENTAL
+        value: "false"
+      - key: MURAL_LIVE_MODEL
+        value: gpt-live-1
+      - key: MURAL_MINUTE_STRIPE_QUANTITY_ENABLED
+        value: "false"
+      - key: MURAL_MINUTE_APPLE_QUANTITY_ENABLED
+        value: "false"

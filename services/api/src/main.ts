@@ -154,7 +154,7 @@ try {
     await db.end(); process.exit(0);
   };
   process.on('SIGTERM', close); process.on('SIGINT', close);
-  await app.listen({ port: Number(process.env.PORT ?? 8080), host: '0.0.0.0' });
+  await app.listen({ port: Number(process.env.PORT ?? 8080), host: process.env.MURAL_API_HOST ?? '0.0.0.0' });
   minuteCommerce?.runner.start();
   diagnostics.record('service_started', { operation: 'startup' });
 } catch (error) {
