@@ -2,72 +2,43 @@
 
 The web client is a responsive React app served by the same HTTPS origin as the API. It stores web conversations and vocabulary in PostgreSQL, and is restricted to the Google account configured as the owner. Existing iOS and Android clients are not part of this release.
 
-## Deploy on Google Cloud Run with Neon
+## Deploy on Render with Neon
 
-The Cloud Run setup uses one multi-container service: Caddy receives public HTTPS traffic and forwards it to the API and web containers over Cloud Run's local container network. Cloud Run supports this sidecar pattern and starts dependent containers after their startup probes pass ([sidecar docs](https://docs.cloud.google.com/run/docs/deploying), [container start order](https://docs.cloud.google.com/run/docs/configuring/services/containers)). The API connects to Neon. A separate Cloud Run Job applies the database migrations. The deployment files are in `infra/gcp/`.
+The Render deployment is one Docker Web Service. Caddy serves the React app and proxies API requests to Fastify within the same container, preserving same-origin cookies and the protected proxy headers. Render terminates public HTTPS. The container applies pending PostgreSQL migrations before starting the API and Caddy. Deployment files are in `infra/render/` and `render.yaml`.
 
-### Before deploying
+### Before creating the Render service
 
-1. Create a Google Cloud project, attach a billing account, install the Google Cloud CLI, and run `gcloud auth login`. Choose a Cloud Run region near your Neon region. The app can use the generated `run.app` URL; a custom domain is optional.
-2. Create a Neon project and a dedicated database for this deployment. Save both connection strings privately:
-   - Use the **pooled** connection string (host includes `-pooler`) for the running API.
-   - Use the **direct** connection string for migrations.
-   Both should require TLS. See [Neon's connection pooling guide](https://neon.com/docs/connect/connection-pooling).
-3. Create a Google OAuth client of type **Web application**. The authorized JavaScript origin depends on the Cloud Run URL, which is returned after the first private deploy below; add it then. The app uses Google Identity Services and needs the authorized JavaScript origin.
+1. Create a Neon project and dedicated database. Save both connection strings privately: use the **pooled** URL (host includes `-pooler`) for `DATABASE_URL`, and the **direct** URL for `MURAL_MIGRATION_DATABASE_URL`. Both should require TLS. See [Neon's connection pooling guide](https://neon.com/docs/connect/connection-pooling).
+2. Choose a Render region close to Neon. Render defaults to Oregon when no region is specified, and a service's region cannot be changed after creation; set `region` in `render.yaml` before the first Blueprint sync.
+3. Create a Google OAuth client of type **Web application**. Add the Render service URL as an authorized JavaScript origin after the first deploy.
 4. Pick the exact Google email that will own the Mural account.
-5. Create these Secret Manager secrets and add their values. Cloud Run reads them at startup ([secret configuration](https://docs.cloud.google.com/run/docs/configuring/services/secrets)). Do not commit them or paste them into chat:
-   - `mural-neon-pooled-url`: the Neon pooled connection string.
-   - `mural-neon-direct-url`: the Neon direct connection string.
-   - `mural-accounts-hmac-key`, `mural-accounts-proxy-token`, and `mural-web-encryption-key`: three distinct random lowercase 64-character hex values. Generate each separately, for example with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
-6. Create service accounts `mural-runtime` and `mural-migration`. Grant `roles/secretmanager.secretAccessor` to `mural-runtime` only on the pooled URL, HMAC key, proxy token, and encryption key. Grant it to `mural-migration` only on the direct URL. The migration job does not need the runtime credentials.
+5. Connect your GitHub account to Render and create a Blueprint from this repository's `render.yaml`. The Blueprint asks for private values instead of storing them in Git. Keep these values private.
+6. When prompted, provide `DATABASE_URL` (pooled Neon URL), `MURAL_MIGRATION_DATABASE_URL` (direct Neon URL), `GOOGLE_CLIENT_ID`, and `MURAL_WEB_OWNER_EMAIL`. Create three distinct random lowercase 64-character hex secrets for `ACCOUNTS_HMAC_KEY`, `ACCOUNTS_PROXY_TOKEN`, and `MURAL_SECRETS_ENCRYPTION_KEY`. Generate each separately with:
 
-The manifests pin these secrets to version `1`. When rotating one, add a new Secret Manager version, update the matching `key` in `infra/gcp/service.yaml.template` or `job.yaml.template`, and deploy the new revision/job.
+   ```sh
+   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+   ```
 
-### Build and deploy
+The Blueprint uses `RENDER_EXTERNAL_URL` for `PUBLIC_ORIGIN` and `MURAL_WEB_ORIGIN`, and reuses `GOOGLE_CLIENT_ID` for the browser build. Caddy listens on Render's `PORT` (default `10000`) and proxies API traffic to Fastify on loopback. Render's edge supplies `CF-Connecting-IP`; Caddy forwards it with the server-side proxy token ([Render client IP guidance](https://render.com/articles/host-pocketbase-on-render)).
 
-Run these from the repository root in PowerShell. Replace the example values with your project ID, region, Google OAuth client ID, and owner email. The commands build images remotely with Cloud Build, so Docker Desktop is not required on your laptop.
+The default Blueprint uses Render's Free plan. Free web services sleep after 15 minutes without traffic, can take about a minute to wake, have an ephemeral filesystem, and are intended for hobby use rather than production. Mural stores data in Neon, not the container filesystem. Free services do not support pre-deploy commands or one-off jobs, so the container runs the idempotent migration runner on each start. See [Render's Free service limits](https://render.com/docs/free) and [Docker deploy documentation](https://render.com/docs/docker).
 
-```powershell
-$project = "YOUR_GCP_PROJECT_ID"
-$region = "us-central1"
-$googleClientId = "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
-$ownerEmail = "you@example.com"
-$tag = Get-Date -Format "yyyyMMddHHmmss"
+### First deploy and verification
 
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com --project $project
-gcloud artifacts repositories create mural --repository-format=docker --location=$region --project=$project
-gcloud builds submit . --project=$project --region=$region --config=infra/gcp/cloudbuild.yaml --substitutions="_REGION=$region,_TAG=$tag,_GOOGLE_CLIENT_ID=$googleClientId"
+After the Blueprint creates the service, add its `https://<service>.onrender.com` URL to the Google OAuth client's **Authorized JavaScript origins**. This OAuth Console change does not require a container rebuild. Once it takes effect, sign in with the configured owner email and check:
+
+```text
+https://<service>.onrender.com/healthz
+https://<service>.onrender.com/readyz
 ```
 
-The Cloud Build service account needs `roles/artifactregistry.writer` on the `mural` repository. Render the manifests with no `-WebOrigin` first; this creates a **private** bootstrap service using a placeholder origin:
+`/healthz` checks the app process. `/readyz` also checks Neon. This is a fresh database setup; it does not copy rows from a local Docker Compose database. Export and import local web data separately if you already have records to keep.
 
-```powershell
-.\infra\gcp\render-manifests.ps1 -ProjectId $project -Region $region -ImageTag $tag -GoogleClientId $googleClientId -OwnerEmail $ownerEmail
-$manifestDir = Join-Path $env:TEMP "mural-gcp-$project"
-gcloud run jobs replace (Join-Path $manifestDir "job.yaml") --project=$project --region=$region
-gcloud run jobs execute mural-migrate --project=$project --region=$region --wait
-gcloud run services replace (Join-Path $manifestDir "service.yaml") --project=$project --region=$region
-$url = gcloud run services describe mural --project=$project --region=$region --format="value(status.url)"
-$url
-```
+Hosted voice remains paused: the Blueprint sets `HOSTED_VOICE_EXPERIMENTAL=false` and does not configure `OPENAI_API_KEY`. The $10 monthly voice allowance remains unavailable until voice is separately configured.
 
-Add `$url` as an **Authorized JavaScript origin** on the Google OAuth web client. Then render and deploy the final public Cloud Run revision:
+### Rollback
 
-```powershell
-.\infra\gcp\render-manifests.ps1 -ProjectId $project -Region $region -ImageTag $tag -GoogleClientId $googleClientId -OwnerEmail $ownerEmail -WebOrigin $url
-gcloud run services replace (Join-Path $manifestDir "service.yaml") --project=$project --region=$region
-Invoke-RestMethod "$url/readyz"
-```
-
-The public Cloud Run URL still requires Google sign-in with the configured owner email. The service scales to zero and is capped at one instance to limit idle usage and database connections. This is a fresh schema setup: these steps do not copy rows from a local Docker Compose database. If the local web app already contains data you want to keep, export and import that data separately before switching over.
-
-The deploy keeps hosted voice paused: it sets `HOSTED_VOICE_EXPERIMENTAL=false` and does not configure `OPENAI_API_KEY`. The existing $10 monthly voice allowance remains in the app but is not spendable until voice is separately configured.
-
-### Rollback and post-deploy setup
-
-If the new revision has a problem, use Cloud Run's revision traffic controls to send traffic back to the previous revision. That rolls back the app revision, not database changes. Keep the Neon database and the `mural-web-encryption-key` secret: the key is needed to decrypt SIWC or compatible-provider credentials stored in that database. Back up both independently.
-
-After the owner signs in once, connect SIWC using the laptop login flow below. Cloud Run does not provide an SSH host, so the existing Compose/SSH import command is not applicable; transfer the resulting credential file through a short-lived Secret Manager secret and run `web-admin.js import-siwc` as a one-off Cloud Run Job, then delete that temporary secret. Keep the credentials file private and do not place it in the repository.
+Use Render's deploy history to roll back to a previous application image. That rolls back the image, not database migrations. Keep the Neon database and `MURAL_SECRETS_ENCRYPTION_KEY`; the key decrypts SIWC or compatible-provider credentials stored there. Back them up independently. The Cloud Run templates remain in `infra/gcp/` as a reference.
 
 ## Self-host with Docker Compose
 
@@ -89,16 +60,19 @@ Keep `.env`, database dumps, and OAuth credential files private. The API encrypt
 
 ### Sign in with your ChatGPT plan (optional)
 
-This uses the local SIWC flow on your laptop, then sends its short-lived credential bundle to the server over SSH. It does not require the server to run Codex or to have an OpenAI API key. Run it from the cloned repository on your laptop with Node.js 22 or newer.
+This uses the local SIWC flow on your laptop. Render does not need to run Codex or have an OpenAI API key. Run these commands from the cloned repository on your laptop with Node.js 22 or newer.
 
 1. Sign in to Mural once so your owner account exists.
-2. On the server, from `services/api`, get the stable host identity:
+2. On your laptop, create `services/api/.env` with the Neon pooled `DATABASE_URL`, `MURAL_WEB_OWNER_EMAIL`, and the same `MURAL_SECRETS_ENCRYPTION_KEY` used by Render. This file is gitignored; keep it private.
+3. From `services/api`, install dependencies, build the admin command, and get the stable host identity:
 
    ```sh
-   docker compose run --rm api pnpm run web-admin -- host-id
+   pnpm install --frozen-lockfile
+   pnpm run build
+   pnpm run web-admin -- host-id
    ```
 
-3. On your laptop, run the login script and open the displayed URL in the browser where you use ChatGPT. Save the file outside the repository:
+4. From the repository root, run the login script and open the displayed URL in the browser where you use ChatGPT. Save the file outside the repository:
 
    ```sh
    node scripts/siwc-login.mjs "$HOME/.config/mural/siwc-credentials.json" "urn:uuid:PASTE-HOST-ID-HERE"
@@ -106,24 +80,15 @@ This uses the local SIWC flow on your laptop, then sends its short-lived credent
 
    The script listens only on `127.0.0.1:1455`, checks OAuth state and PKCE, and writes the credential file with user-only permissions where the OS supports them. The first sign-in registers a SIWC client for this Mural server; later sign-ins reuse it.
 
-4. Transfer the file to the server with `scp`, then import it into the encrypted database. Replace the SSH host and paths:
+5. From `services/api`, import the local file into Neon. Replace the path with the location you chose above:
 
    ```sh
-   scp "$HOME/.config/mural/siwc-credentials.json" mural-host:/tmp/mural-siwc-credentials.json
-   ssh mural-host 'chmod 600 /tmp/mural-siwc-credentials.json'
+   pnpm run web-admin -- import-siwc "$HOME/.config/mural/siwc-credentials.json"
    ```
 
-   On the server, from `services/api`, mount that file read-only for the one-time import:
+6. Remove the local credential file after import succeeds. In Mural Settings, select **Sign in with ChatGPT**, load the available models, and explicitly save the model you want. SIWC supports Responses API requests; the server sends `store:false` and keeps conversation history locally.
 
-   ```sh
-   docker compose run --rm --user "$(id -u):$(id -g)" \
-     -v /tmp/mural-siwc-credentials.json:/run/siwc.json:ro \
-     api pnpm run web-admin -- import-siwc /run/siwc.json
-   ```
-
-5. Remove the temporary server copy after the importer succeeds. In Mural Settings, select **Sign in with ChatGPT**, load the available models, and explicitly save the model you want. SIWC supports Responses API requests; the server sends `store:false` and keeps the conversation history locally.
-
-The server refreshes the access token and stores rotated credentials encrypted. A reconnect requires repeating the local sign-in and SSH transfer. For SIWC background and model limitations, see [OpenAI's SIWC documentation](https://developers.openai.com/siwc/token-sharing-open-source).
+The server refreshes access tokens and stores rotated credentials encrypted. A reconnect requires repeating the local sign-in and import. For SIWC background and model limitations, see [OpenAI's SIWC documentation](https://developers.openai.com/siwc/token-sharing-open-source).
 
 ### Optional OpenAI-compatible text provider
 

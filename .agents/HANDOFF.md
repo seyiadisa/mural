@@ -1,22 +1,26 @@
 # Session Handoff
 
 ## Last Completed Task
-- Implemented the private responsive web app, its owner-only API and PostgreSQL schema, the pnpm API migration, and deployment configuration for Google Cloud Run with Neon.
-- Hosted voice remains disabled until configured. The web app's $10 estimate cap resets per UTC calendar month; it is an app-side cap, not a provider billing limit.
-- Branch: `main`.
-- Implementation commits: `9a0c734` (ignore rules), `19864ae` (project knowledge), `51531c1` (pnpm), `d481478` (web API), `6dda351` (web client), `3aad0a1` (deployment config).
+- Prepared and validated a Render Docker deployment for the private Mural web app, with Neon PostgreSQL.
+- Built local image `mural-render:verification`; API and web builds passed inside Docker, Caddy config validated, Render Blueprint validation succeeded.
+- Added a pnpm 11 `allowBuilds` policy for esbuild only, required for reproducible Docker builds.
+- Branch: `main`; Render implementation and documentation changes are ready for separate commits.
 
 ## Current State
-- The working tree is clean after the deployment documentation commit.
-- No GCP resources, credentials, or provider keys were created. No services are running.
-- `gcloud` is not installed in this workspace; Cloud Build submission and Cloud Run validation/deployment remain pending.
+- Render project: `Mural` (`prj-dbec94gm7kps73de22c0`); Production environment: `evm-dbec94gm7kps73de22cg`.
+- Render CLI confirms Production has no services or environment groups. No service or deployment has been created.
+- `render.yaml` passes live Blueprint validation. Region is not specified; choose one close to Neon before creating the service, because Render does not allow a service region change later.
+- No Neon URLs, Google Web client ID, owner email, or app secrets are available in this checkout or Render Production.
+- The local Docker build used `VITE_GOOGLE_CLIENT_ID=render-verification-placeholder`; do not deploy that verification image. Render must build the source with the real OAuth client ID.
+- Hosted voice remains off (`HOSTED_VOICE_EXPERIMENTAL=false`, cap `0`); GPT-Live credentials are not needed for this deployment.
 
 ## Next Task
-- Deploy using the steps in `docs/web-app.md`. Gather the GCP project ID and region, Neon pooled and direct connection URLs, Google OAuth web client ID, and owner email. Keep secret values out of chat.
-- Create the Secret Manager entries and least-privilege service accounts, build images, apply the migration job, and deploy the private bootstrap service. Add its Cloud Run URL as the OAuth authorized JavaScript origin, then render and deploy the final service.
-- After owner sign-in, use the laptop SIWC login flow and the one-off Secret Manager/Cloud Run Job import described in the guide. Keep hosted voice disabled unless separately configured.
+- Complete separate commits on `main`, then push the fork if needed for Render to read the source.
+- Configure the Neon pooled/direct URLs, Google Web client ID, owner email, and three separate 64-character hex secrets directly in Render. Do not put secrets in chat or Git.
+- Set `region` in `render.yaml` to match the chosen Neon region before first Blueprint sync. Create/sync the Blueprint in Mural Production, deploy, then verify `/healthz`, `/readyz`, owner sign-in, and sanitized logs.
+- After owner Google sign-in, import SIWC credentials from the laptop using the `web-admin` command documented in `docs/web-app.md`.
 
 ## Open Issues
-- Cloud Run templates still need validation against the user's GCP project; no Neon schema exists yet.
-- Local Docker Compose remains unverified in this environment.
-- SIWC is not configured, and the app is not connected to a ChatGPT account. No OpenAI API key is configured.
+- No live service exists, so database migrations, readiness, and owner sign-in have not been tested against Render or Neon.
+- No PostgreSQL integration tests were run; the Docker build verifies production compilation only.
+- An earlier separate pnpm build watcher may still report its pre-fix result; the later Docker build successfully ran both API and web builds after the allowlist fix.
