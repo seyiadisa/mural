@@ -1,6 +1,10 @@
 /** Decode bounded Responses SSE without treating partial text as a completed, billable result. */
-export async function responseTextStream(response: Response, onText: (text: string) => void): Promise<unknown> {
-  if (!response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream') || !response.body) throw new Error('Invalid provider stream');
+export async function responseTextStream(response: Response, onText: (text: string) => void,
+  options: { allowMissingContentType?: boolean } = {}): Promise<unknown> {
+  const contentType = response.headers.get('content-type');
+  const validContentType = contentType?.toLowerCase().startsWith('text/event-stream') ||
+    (contentType === null && options.allowMissingContentType === true);
+  if (!validContentType || !response.body) throw new Error('Invalid provider stream');
   const reader = response.body.getReader();
   const decoder = new TextDecoder('utf-8', { fatal: true });
   let pending = '', data: string[] = [], eventBytes = 0, total = 0, text = '';

@@ -163,10 +163,11 @@ async function streamProvider(db: Database, accountID: string, settings: WebAISe
   }
   if (settings.apiStyle === 'responses') {
     let emitted = 0, completeText = '';
+    // SIWC can omit Content-Type; event validation and completion checks still apply.
     await responseTextStream(response, cumulative => {
       completeText = cumulative;
       const delta = cumulative.slice(emitted); emitted = cumulative.length; if (delta) onText(delta);
-    });
+    }, { allowMissingContentType: settings.provider === 'siwc' });
     if (!completeText.trim()) throw new ServiceError('ai_provider_incomplete', 502);
     return completeText.trim();
   }

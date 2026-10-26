@@ -32,6 +32,22 @@ test('stream accepts multiple data lines and reads refusal through final usage',
     event({ type: 'response.completed', response: final }));
   assert.deepEqual(await responseTextStream(fixture.response, () => assert.fail('Refusal is not meaning text')), final);
 });
+test('missing stream content type requires explicit opt-in and still validates completion', async () => {
+  const text = event({ type: 'response.output_text.delta', delta: 'OK' }) +
+    event({ type: 'response.completed', response: final });
+  const headerless = (source: string) => new Response(new TextEncoder().encode(source));
+  await assert.rejects(responseTextStream(headerless(text), () => {}), /Invalid provider stream/);
+  const seen: string[] = [];
+  assert.deepEqual(await responseTextStream(headerless(text), value => seen.push(value), { allowMissingContentType: true }), final);
+  assert.deepEqual(seen, ['OK']);
+  for (const source of ['<html>not a stream</html>', 'data: not-json\n\n',
+    event({ type: 'response.output_text.delta', delta: 'partial' }), event({ type: 'response.failed' }),
+    'data: ' + 'x'.repeat(65_537)]) {
+    await assert.rejects(responseTextStream(headerless(source), () => {}, { allowMissingContentType: true }));
+  }
+  await assert.rejects(responseTextStream(Response.json(final), () => {}, { allowMissingContentType: true }), /Invalid provider stream/);
+  await assert.rejects(responseTextStream(new Response(null), () => {}, { allowMissingContentType: true }), /Invalid provider stream/);
+});
 test('stream rejects missing terminal, errors, malformed events and size violations', async () => {
   for (const source of [event({ type: 'response.output_text.delta', delta: 'partial' }), 'data: [DONE]\n\n',
     'data: not-json\n\n', event({ type: 'error' }), event({ type: 'response.failed' }),

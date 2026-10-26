@@ -98,10 +98,10 @@ export async function siwcModels(db: Database, accountID: string): Promise<strin
     headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' } }); }
   catch { throw new ServiceError('ai_provider_unavailable', 502); }
   if (!response.ok) { await response.body?.cancel().catch(() => {}); throw new ServiceError('siwc_models_unavailable', 502); }
-  const result = await boundedJSON(response);
-  if (!Array.isArray(result.data)) throw new ServiceError('siwc_models_invalid', 502);
-  return result.data.filter((item: any) => item && item.visibility === 'list' && typeof item.id === 'string')
-    .map((item: any) => item.id as string).sort();
+  const result = await boundedJSON(response, 2_097_152);
+  if (!Array.isArray(result.models)) throw new ServiceError('siwc_models_invalid', 502);
+  return result.models.filter((item: any) => item && item.visibility === 'list' && typeof item.slug === 'string')
+    .map((item: any) => item.slug as string);
 }
 
 export async function storedSIWCCredentials(db: Database, accountID: string): Promise<SIWCCredentials> {
