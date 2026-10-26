@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import type { IncomingHttpHeaders } from 'node:http';
 import type { PoolClient } from 'pg';
-import { trustedClientNetwork } from './access-requests.js';
+import { trustedClientNetwork, trustRenderEdge } from './access-requests.js';
 import { transaction, type Database } from './db.js';
 import { ServiceError } from './errors.js';
 
@@ -13,7 +13,7 @@ export const AI_REPORT_REASONS = ['offensive', 'incorrect', 'wrong_language', 'o
 export const AI_REPORT_LIMITS = Object.freeze({ networkHourly: 5, networkDaily: 20, globalHourly: 200, globalDaily: 1_000 });
 export type AIReportReason = typeof AI_REPORT_REASONS[number];
 export interface AIReportInput { reportID: string; languageID: string; reason: AIReportReason; excerpt: string; consentVersion: typeof AI_REPORT_CONSENT_VERSION }
-export interface AIReportConfig { hmacKey: string; proxyToken: string; allowLocalLoopback: boolean }
+export interface AIReportConfig { hmacKey: string; proxyToken: string; allowLocalLoopback: boolean; trustRenderEdge?: boolean }
 declare const networkReference: unique symbol;
 export type TrustedFeedbackNetwork = string & { readonly [networkReference]: true };
 
@@ -22,13 +22,15 @@ export function aiReportConfig(env: NodeJS.ProcessEnv): AIReportConfig | undefin
   const hmacKey = env.AI_REPORTS_HMAC_KEY ?? '', proxyToken = env.AI_REPORTS_PROXY_TOKEN ?? '';
   if (!/^[a-f0-9]{64}$/.test(hmacKey) || !/^[a-f0-9]{64}$/.test(proxyToken) || hmacKey === proxyToken)
     throw new Error('AI reports require separate random 32-byte HMAC and trusted-proxy secrets.');
-  return { hmacKey, proxyToken, allowLocalLoopback: env.AI_REPORTS_ALLOW_LOCAL_LOOPBACK === 'true' };
+  return { hmacKey, proxyToken, allowLocalLoopback: env.AI_REPORTS_ALLOW_LOCAL_LOOPBACK === 'true',
+    ...(trustRenderEdge(env) ? { trustRenderEdge: true } : {}) };
 }
 
 /** Call with trusted proxy headers on the server, never a network field from the body. */
 export function reportNetwork(headers: IncomingHttpHeaders, remoteAddress: string, config: AIReportConfig, now = new Date()): TrustedFeedbackNetwork {
   let network: string;
-  try { network = trustedClientNetwork(headers, remoteAddress, config.proxyToken, config.allowLocalLoopback); }
+  try { network = trustedClientNetwork(headers, remoteAddress, config.proxyToken, config.allowLocalLoopback,
+    config.trustRenderEdge === true); }
   catch { throw new ServiceError('ai_reports_unavailable', 503); }
   return createHmac('sha256', Buffer.from(config.hmacKey, 'hex'))
     .update(`mural-ai-report\n${now.toISOString().slice(0, 10)}\n${network}`).digest('hex') as TrustedFeedbackNetwork;

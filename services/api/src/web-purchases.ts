@@ -32,7 +32,8 @@ export class WebPurchases {
     return value;
   }
   clientAddress(headers: IncomingHttpHeaders, remote: string): string {
-    try { return trustedClientNetwork(headers, remote, this.admission.proxyToken, this.admission.allowLocalLoopback); }
+    try { return trustedClientNetwork(headers, remote, this.admission.proxyToken, this.admission.allowLocalLoopback,
+      this.admission.trustRenderEdge === true); }
     catch { throw new ServiceError('accounts_proxy_not_ready', 503); }
   }
   async enter(operation: 'challenge' | 'verify', address: string): Promise<void> {

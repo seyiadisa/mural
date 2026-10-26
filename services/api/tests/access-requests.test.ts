@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { createApp } from '../src/app.js';
 import { connectDatabase } from '../src/db.js';
 import { migrate } from '../src/migrate.js';
-import { AccessRequests, ACCESS_REQUEST_LIMITS as limits, accessRequestConfig, normalizeAccessEmail, pruneAccessRequests, deleteAccessRequest } from '../src/access-requests.js';
+import { AccessRequests, ACCESS_REQUEST_LIMITS as limits, accessRequestConfig, normalizeAccessEmail, pruneAccessRequests, deleteAccessRequest,
+  trustedClientNetwork } from '../src/access-requests.js';
 import { exportAccessRequests } from '../src/access-requests-admin.js';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -28,10 +29,18 @@ test('access requests require explicit activation and separate secrets; local or
   assert.throws(() => accessRequestConfig({ ACCESS_REQUESTS_ENABLED: 'true' }));
   const env = { ACCESS_REQUESTS_ENABLED: 'true', ACCESS_REQUEST_HMAC_KEY: config.hmacKey, ACCESS_REQUEST_PROXY_TOKEN: config.proxyToken };
   assert.deepEqual(accessRequestConfig(env), config);
+  assert.deepEqual(accessRequestConfig({ ...env, MURAL_TRUST_RENDER_EDGE: 'true' }), { ...config, trustRenderEdge: true });
   for (const origin of ['https://evil.test', 'http://localhost:5173/path', 'http://localhost:5173/', 'https://localhost:5173', 'http://localhost.evil.test'])
     assert.throws(() => accessRequestConfig({ ...env, ACCESS_REQUEST_LOCAL_ORIGIN: origin }));
   assert.equal(accessRequestConfig({ ...env, ACCESS_REQUEST_LOCAL_ORIGIN: 'http://localhost:5173' })?.localOrigin, 'http://localhost:5173');
   assert.throws(() => accessRequestConfig({ ...env, ACCESS_REQUEST_PROXY_TOKEN: config.hmacKey }));
+});
+test('Render edge addresses are trusted only when explicitly enabled and valid', () => {
+  const headers = { 'cf-connecting-ip': '198.51.100.44' };
+  assert.throws(() => trustedClientNetwork(headers, '10.0.0.1', config.proxyToken));
+  assert.equal(trustedClientNetwork(headers, '10.0.0.1', config.proxyToken, false, true), '198.51.100.44');
+  assert.throws(() => trustedClientNetwork({ 'cf-connecting-ip': 'not-an-address' }, '10.0.0.1', config.proxyToken, false, true),
+    { code: 'access_request_proxy_not_ready' });
 });
 test('email normalization accepts ordinary plus addresses and rejects unsafe or unsupported forms', () => {
   assert.equal(normalizeAccessEmail('  Learner+Mural@Example.COM  '), 'learner+mural@example.com');

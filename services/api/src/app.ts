@@ -28,6 +28,7 @@ import { Diagnostics, errorReference } from './diagnostics.js';
 import { startupDiagnostic, type StartupDiagnostic } from './startup-diagnostics.js';
 import { WEB_PURCHASE_PATH, type WebPurchases } from './web-purchases.js';
 import { registerWebRoutes } from './web-routes.js';
+import { webNotFoundHandler } from './web-static.js';
 
 declare module 'fastify' {
   interface FastifyContextConfig { rateLimit?: { max: number; timeWindow: number } }
@@ -40,7 +41,7 @@ export interface Services { diagnostics?: Diagnostics; db: Database; auth: AuthC
   minuteCommerce?: { purchases: MinutePurchases; aiPurchases?: AIValuePurchases; fulfillment?: PurchaseFulfillmentRouter;
     stripe?: StripeMinuteProvider; play?: PlayMinuteProvider; apple?:AppleMinuteProvider; appleSandbox?:AppleMinuteProvider;
     appleScopes?:ApplePurchaseScopes; playNotifications?: Pick<PlayRtdnSubscriber,'isOperational'> };
-  web?: { ownerEmail?: string; origin: string };
+  web?: { ownerEmail?: string; origin: string; staticRoot?: string };
   accounts?: { admission: AuthAdmission; identityVerifier?: typeof verifyIdentity } }
 const accountPaths = new Set(['/v1/auth/challenge', '/v1/auth/exchange', '/v1/auth/sign-out', '/v1/web/auth/challenge', '/v1/web/auth/exchange', '/v1/web/auth/sign-out', '/v1/account', '/v1/wallet', '/v1/minutes/welcome', '/v1/minutes/link-guest',
   '/v1/account/connect-google',
@@ -111,7 +112,8 @@ export function createApp(services: Services) {
     const proxy = services.accounts?.admission.config ?? services.accessRequests?.config;
     if (proxy) {
       let network: string;
-      try { network = trustedClientNetwork(request.headers, request.raw.socket.remoteAddress ?? request.ip, proxy.proxyToken); }
+      try { network = trustedClientNetwork(request.headers, request.raw.socket.remoteAddress ?? request.ip, proxy.proxyToken,
+        false, proxy.trustRenderEdge === true); }
       catch { throw new ServiceError('trusted_proxy_required', 503); }
       networkKey = createHmac('sha256', Buffer.from(proxy.hmacKey, 'hex')).update(network).digest('hex');
     }
@@ -128,7 +130,12 @@ export function createApp(services: Services) {
     }
   };
   app.addHook('onRequest', async (request, reply) => {
-    reply.header('Cache-Control', 'no-store').header('X-Content-Type-Options', 'nosniff');
+    reply.header('Cache-Control', 'no-store')
+      .header('Strict-Transport-Security', 'max-age=31536000')
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Referrer-Policy', 'no-referrer')
+      .header('Permissions-Policy', 'microphone=(self)')
+      .header('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' https://accounts.google.com https://api.openai.com wss://api.openai.com; frame-src https://accounts.google.com/gsi/; upgrade-insecure-requests");
     // Fastify decodes static route names. Security checks must use the matched route too.
     const path = request.routeOptions.url ?? request.url.split('?')[0]!;
     const routeLimit = request.routeOptions.config.rateLimit;
@@ -154,7 +161,7 @@ export function createApp(services: Services) {
       }
       return;
     }
-    // This endpoint has separate durable admission limits; Caddy's shared address is not its visitor identity.
+    // This endpoint has separate durable admission limits; use the trusted ingress client address.
     if (path === ACCESS_REQUEST_PATH || path === AI_REPORT_PATH || path === '/healthz') return;
     if (!routeLimit) limitNetworkRequest(request, reply, paymentReadOptions.config.rateLimit);
   });
@@ -181,7 +188,6 @@ export function createApp(services: Services) {
     }
     reply.code(status).send({ error: { code } });
   });
-  app.setNotFoundHandler(() => { throw new ServiceError('not_found', 404); });
   const featureState=()=>{
     const hostedVoice=Boolean(services.hosted?.available && (!services.hosted.minuteFunded || services.hostedHelpers || services.hosted.publicMinuteAccess));
     const livePayments=['stripe','play','apple'].some(provider=>services.minuteCommerce?.aiPurchases?.products(provider as 'stripe'|'play'|'apple').some(product=>product.environment==='live'));
@@ -288,7 +294,7 @@ export function createApp(services: Services) {
         return reply.header('Access-Control-Allow-Methods', 'POST').header('Access-Control-Allow-Headers', 'Content-Type')
           .header('Access-Control-Max-Age', '600').code(204).send();
       }
-      // Caddy overwrites these headers. A direct request cannot invent its network address.
+      // The configured edge supplies the address; local proxies require the server-side token.
       access.clientAddress(request.headers, request.raw.socket.remoteAddress ?? request.ip, origin);
       if (request.headers['content-type']?.split(';')[0]?.trim().toLowerCase() !== 'application/json') throw new ServiceError('invalid_content_type', 415);
     },
@@ -641,5 +647,6 @@ export function createApp(services: Services) {
   registerWebRoutes(app, { db, auth: services.auth, ownerEmail: services.web?.ownerEmail, origin: services.web?.origin ?? 'http://localhost:8080',
     identityVerifier: services.accounts?.identityVerifier, hosted: services.hosted });
   app.get('/payment-return', async (_request, reply) => reply.type('text/html').send('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Mural sandbox</title><body><h1>Return to Mural</h1><p>This is a sandbox payment test. The app checks payment confirmation independently.</p></body></html>'));
+  app.setNotFoundHandler(webNotFoundHandler(services.web?.staticRoot));
   return app;
 }

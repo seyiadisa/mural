@@ -109,6 +109,8 @@ test('accounts remain disabled without an explicit switch and independent valid 
   assert.throws(() => accountAdmissionConfig({ ACCOUNTS_ENABLED: 'true' }));
   assert.throws(() => accountAdmissionConfig({ ACCOUNTS_ENABLED: 'true', ACCOUNTS_HMAC_KEY: admissionConfig.hmacKey, ACCOUNTS_PROXY_TOKEN: admissionConfig.hmacKey }));
   assert.deepEqual(accountAdmissionConfig({ ACCOUNTS_ENABLED: 'true', ACCOUNTS_HMAC_KEY: admissionConfig.hmacKey, ACCOUNTS_PROXY_TOKEN: admissionConfig.proxyToken }), admissionConfig);
+  assert.equal(accountAdmissionConfig({ ACCOUNTS_ENABLED: 'true', ACCOUNTS_HMAC_KEY: admissionConfig.hmacKey,
+    ACCOUNTS_PROXY_TOKEN: admissionConfig.proxyToken, MURAL_TRUST_RENDER_EDGE: 'true' })?.trustRenderEdge, true);
 });
 test('disabled account routes reject before database access and advertise no sign-in providers', async () => {
   let queries = 0;

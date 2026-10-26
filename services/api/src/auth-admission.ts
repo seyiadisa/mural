@@ -1,17 +1,18 @@
 import { createHmac } from 'node:crypto';
 import type { IncomingHttpHeaders } from 'node:http';
 import { transaction, type Database } from './db.js';
-import { trustedClientNetwork } from './access-requests.js';
+import { trustedClientNetwork, trustRenderEdge } from './access-requests.js';
 import { ServiceError } from './errors.js';
 
 export type AuthOperation = 'challenge' | 'exchange' | 'account' | 'guest';
-export interface AuthAdmissionConfig { hmacKey: string; proxyToken: string; allowLocalLoopback: boolean }
+export interface AuthAdmissionConfig { hmacKey: string; proxyToken: string; allowLocalLoopback: boolean; trustRenderEdge?: boolean }
 export function accountAdmissionConfig(env: NodeJS.ProcessEnv): AuthAdmissionConfig | undefined {
   if (env.ACCOUNTS_ENABLED !== 'true') return undefined;
   const hmacKey = env.ACCOUNTS_HMAC_KEY ?? '', proxyToken = env.ACCOUNTS_PROXY_TOKEN ?? '';
   if (!/^[a-f0-9]{64}$/.test(hmacKey) || !/^[a-f0-9]{64}$/.test(proxyToken) || hmacKey === proxyToken)
     throw new Error('Accounts require separate random 32-byte hex secrets.');
-  return { hmacKey, proxyToken, allowLocalLoopback: env.ACCOUNTS_ALLOW_LOCAL_LOOPBACK === 'true' };
+  return { hmacKey, proxyToken, allowLocalLoopback: env.ACCOUNTS_ALLOW_LOCAL_LOOPBACK === 'true',
+    ...(trustRenderEdge(env) ? { trustRenderEdge: true } : {}) };
 }
 const limits: Record<AuthOperation, { network: number; global: number }> = {
   challenge: { network: 60, global: 2000 }, exchange: { network: 120, global: 4000 }, account: { network: 600, global: 20_000 },
@@ -21,7 +22,8 @@ export class AuthAdmission {
   constructor(readonly db: Database, readonly config: AuthAdmissionConfig) {}
   async enter(operation: AuthOperation, headers: IncomingHttpHeaders, remoteAddress: string): Promise<void> {
     let address: string;
-    try { address = trustedClientNetwork(headers, remoteAddress, this.config.proxyToken, this.config.allowLocalLoopback); }
+    try { address = trustedClientNetwork(headers, remoteAddress, this.config.proxyToken, this.config.allowLocalLoopback,
+      this.config.trustRenderEdge === true); }
     catch { throw new ServiceError('accounts_proxy_not_ready', 503); }
     const accepted = await transaction(this.db, async sql => {
       const now = (await sql.query<{ now: Date }>('SELECT now()')).rows[0]!.now;

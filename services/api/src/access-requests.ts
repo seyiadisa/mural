@@ -12,7 +12,10 @@ export const ACCESS_REQUEST_LIMITS = Object.freeze({
   networkHourly: 5, requestsHourly: 100_000, requestsDaily: 200_000,
   newAddressesDaily: 100_000, retainedAddresses: 100_000
 });
-export interface AccessRequestConfig { hmacKey: string; proxyToken: string; localOrigin?: string }
+export interface AccessRequestConfig { hmacKey: string; proxyToken: string; localOrigin?: string; trustRenderEdge?: boolean }
+export function trustRenderEdge(env: NodeJS.ProcessEnv): boolean {
+  return env.MURAL_TRUST_RENDER_EDGE === 'true';
+}
 export function accessRequestConfig(env: NodeJS.ProcessEnv): AccessRequestConfig | undefined {
   if (env.ACCESS_REQUESTS_ENABLED !== 'true') return undefined;
   const hmacKey = env.ACCESS_REQUEST_HMAC_KEY ?? '', proxyToken = env.ACCESS_REQUEST_PROXY_TOKEN ?? '';
@@ -24,7 +27,7 @@ export function accessRequestConfig(env: NodeJS.ProcessEnv): AccessRequestConfig
     if (url.origin !== localOrigin || url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
       throw new Error('Only an exact HTTP loopback origin can be added.');
   }
-  return { hmacKey, proxyToken, ...(localOrigin ? { localOrigin } : {}) };
+  return { hmacKey, proxyToken, ...(localOrigin ? { localOrigin } : {}), ...(trustRenderEdge(env) ? { trustRenderEdge: true } : {}) };
 }
 
 export function normalizeAccessEmail(value: unknown): string {
@@ -63,7 +66,10 @@ function canonicalIP(value: string): string {
   return `${full.slice(0, 4).map(part => part.padStart(4, '0')).join(':')}::/64`;
 }
 
-export function trustedClientNetwork(headers: IncomingHttpHeaders, remoteAddress: string, proxyToken: string, allowLoopback = false): string {
+export function trustedClientNetwork(headers: IncomingHttpHeaders, remoteAddress: string, proxyToken: string,
+  allowLoopback = false, trustRenderEdgeHeader = false): string {
+  const renderAddress = headers['cf-connecting-ip'];
+  if (trustRenderEdgeHeader && typeof renderAddress === 'string') return canonicalIP(renderAddress);
   const supplied = headers['x-mural-proxy-token'], address = headers['x-mural-client-ip'];
   if (typeof supplied === 'string' && typeof address === 'string') {
     const actual = Buffer.from(supplied), expected = Buffer.from(proxyToken);
@@ -80,7 +86,8 @@ export class AccessRequests {
     return origin;
   }
   clientAddress(headers: IncomingHttpHeaders, remoteAddress: string, origin: string): string {
-    return trustedClientNetwork(headers, remoteAddress, this.config.proxyToken, origin === this.config.localOrigin);
+    return trustedClientNetwork(headers, remoteAddress, this.config.proxyToken, origin === this.config.localOrigin,
+      this.config.trustRenderEdge === true);
   }
   async submit(body: unknown, address: string): Promise<void> {
     const parsed = parseAccessRequest(body);

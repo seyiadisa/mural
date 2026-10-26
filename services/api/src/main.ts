@@ -129,7 +129,8 @@ try {
   if (webOwnerEmail && !/^[^\s@\x00-\x1f\x7f]+@[^\s@\x00-\x1f\x7f]+$/.test(webOwnerEmail)) throw new Error('Invalid MURAL_WEB_OWNER_EMAIL.');
   const app = createApp({ db, auth: { googleClientID: process.env.GOOGLE_CLIENT_ID, googleIOSClientIDs, appleClientID: appleClient,
     googleAndroidServerClientID, googleAndroidClientIDs }, payments, appleRevoker, hosted, hostedHelpers,
-    minuteCommerce, accessRequests, accounts, aiReports,guestMinuteAttestor,webPurchases,web:{ownerEmail:webOwnerEmail,origin:normalizedWebOrigin},
+    minuteCommerce, accessRequests, accounts, aiReports,guestMinuteAttestor,webPurchases,
+    web:{ownerEmail:webOwnerEmail,origin:normalizedWebOrigin,staticRoot:process.env.MURAL_WEB_ROOT},
     diagnostics });
   const cleanup = setInterval(() => {
     void pruneAuthenticationRecords(db).catch(error => { diagnostics.record('background_failed', { operation: 'retention.accounts' }, error); });
