@@ -69,7 +69,8 @@ export function App() {
     let active=true;
     api<{email:string}>('/v1/web/auth/session').then(async result=>{
       if(!active)return;setEmail(result.email);const initial=await refresh();
-      if(active&&initial.conversations[0]) await loadConversation(initial.conversations[0].id);
+      const recent=initial.conversations.find(item=>item.languageID===initial.preferences.languageID);
+      if(active&&recent) await loadConversation(recent.id);
     }).catch(()=>{if(active)setEmail(null);}).finally(()=>{if(active)setAuthReady(true);});
     return()=>{active=false;};
   },[loadConversation,refresh]);
@@ -125,6 +126,17 @@ export function App() {
     try{const created=await api<FullConversation>('/v1/web/conversations',{method:'POST',body:JSON.stringify({languageID,themeID})});
       setConversation(created);setData(current=>current?{...current,conversations:[created,...current.conversations]}:current);setView('talk');}
     catch(e){setError(explainError((e as Error).message));}finally{setWorking(false);}
+  }
+
+  async function savePreferences(preferences:Preferences){
+    const languageChanged=preferences.languageID!==data?.preferences.languageID;
+    if(languageChanged&&sessionRef.current)await closeVoice();
+    await api('/v1/web/preferences',{method:'PUT',body:JSON.stringify(preferences)});
+    setData(current=>current?{...current,preferences}:current);
+    if(languageChanged){
+      setConversation(null);
+      setNotice(`${languageName(preferences.languageID)} selected. Your previous conversations are in Journal.`);
+    }
   }
 
   async function sendText(text:string){
@@ -201,7 +213,8 @@ export function App() {
       await loadGoogleScript();const challenge=await api<{challengeID:string;nonce:string}>('/v1/web/auth/challenge',{method:'POST',body:'{}'});
       window.google.accounts.id.initialize({client_id:cfg.googleClientID,nonce:challenge.nonce,callback:async(response:{credential:string})=>{
         try{await api('/v1/web/auth/exchange',{method:'POST',body:JSON.stringify({idToken:response.credential,challengeID:challenge.challengeID})});
-          const profile=await api<{email:string}>('/v1/web/auth/session');setEmail(profile.email);const initial=await refresh();if(initial.conversations[0])await loadConversation(initial.conversations[0].id);}
+          const profile=await api<{email:string}>('/v1/web/auth/session');setEmail(profile.email);const initial=await refresh();
+          const recent=initial.conversations.find(item=>item.languageID===initial.preferences.languageID);if(recent)await loadConversation(recent.id);}
         catch(e){setError(explainError((e as Error).message));}
       }});
       window.google.accounts.id.prompt();
@@ -235,7 +248,7 @@ export function App() {
           catch(e){setError(explainError((e as Error).message));}}} />}
       {view==='words'&&<WordsView words={data.vocabulary} onDelete={async id=>{try{await api(`/v1/web/vocabulary/${id}`,{method:'DELETE'});setData(current=>current?{...current,vocabulary:current.vocabulary.filter(item=>item.id!==id)}:current);}
         catch(e){setError(explainError((e as Error).message));}}}/>}
-      {view==='settings'&&<SettingsView email={email} data={data} refresh={refresh} onSignOut={async()=>{await closeVoice();try{await api('/v1/web/auth/sign-out',{method:'POST',body:'{}'});}catch{/* Clear local state even if the server response is lost. */}
+      {view==='settings'&&<SettingsView email={email} data={data} refresh={refresh} onSavePreferences={savePreferences} preferencesDisabled={working} onSignOut={async()=>{await closeVoice();try{await api('/v1/web/auth/sign-out',{method:'POST',body:'{}'});}catch{/* Clear local state even if the server response is lost. */}
         setEmail(null);setData(null);setConversation(null);setView('talk');}} onError={setError}/>}
     </main>
     <div className="toast-region" aria-live="polite">{error&&<div className="toast toast-error"><span>{error}</span><button onClick={()=>setError('')} aria-label="Dismiss error">×</button></div>}
@@ -335,11 +348,12 @@ function WordsView({words,onDelete}:{words:VocabularyItem[];onDelete:(id:string)
   </section>;
 }
 
-function SettingsView({email,data,refresh,onSignOut,onError}:{email:string;data:Bootstrap;refresh:()=>Promise<Bootstrap>;onSignOut:()=>Promise<void>;onError:(message:string)=>void}){
+function SettingsView({email,data,refresh,onSavePreferences,preferencesDisabled,onSignOut,onError}:
+  {email:string;data:Bootstrap;refresh:()=>Promise<Bootstrap>;onSavePreferences:(preferences:Preferences)=>Promise<void>;preferencesDisabled:boolean;onSignOut:()=>Promise<void>;onError:(message:string)=>void}){
   const [prefs,setPrefs]=useState<Preferences>(data.preferences);const [ai,setAI]=useState<AISettings>(data.ai);const [apiKey,setApiKey]=useState('');
   const [clearKey,setClearKey]=useState(false);const [models,setModels]=useState<string[]>([]);const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');const [importMode,setImportMode]=useState<'merge'|'replace'>('merge');
   useEffect(()=>{setPrefs(data.preferences);setAI(data.ai);},[data.preferences,data.ai]);
-  async function savePreferences(){setBusy(true);setMessage('');try{await api('/v1/web/preferences',{method:'PUT',body:JSON.stringify({languageID:prefs.languageID,meaningLanguage:prefs.meaningLanguage,conversationTheme:prefs.conversationTheme,colorScheme:prefs.colorScheme})});await refresh();setMessage('Preferences saved.');}
+  async function savePreferences(){setBusy(true);setMessage('');try{await onSavePreferences(prefs);setMessage('Preferences saved.');}
     catch(e){onError(explainError((e as Error).message));}finally{setBusy(false);}}
   async function saveAI(){setBusy(true);setMessage('');try{const payload:Record<string,unknown>={provider:ai.provider,apiBase:ai.apiBase,model:ai.model,apiStyle:ai.apiStyle,nativeWebSearch:ai.nativeWebSearch};if(apiKey.trim())payload.apiKey=apiKey.trim();if(clearKey)payload.clearApiKey=true;
       await api('/v1/web/ai/settings',{method:'POST',body:JSON.stringify(payload)});setApiKey('');setClearKey(false);await refresh();setMessage('AI settings saved.');}
@@ -359,7 +373,7 @@ function SettingsView({email,data,refresh,onSignOut,onError}:{email:string;data:
           <label>Meanings in<select value={prefs.meaningLanguage} onChange={e=>setPrefs({...prefs,meaningLanguage:e.target.value})}>{meaningLanguages.map(item=><option key={item}>{item}</option>)}</select></label>
           <label>Starting theme<select value={prefs.conversationTheme} onChange={e=>setPrefs({...prefs,conversationTheme:e.target.value})}>{themes.map(item=><option key={item[0]} value={item[0]}>{item[1]}</option>)}</select></label>
           <label>Appearance<select value={prefs.colorScheme} onChange={e=>setPrefs({...prefs,colorScheme:e.target.value as Preferences['colorScheme']})}><option value="system">Use device setting</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
-        <div className="settings-card-footer"><span>Changes apply to new conversations.</span><button className="button button-small" onClick={()=>void savePreferences()} disabled={busy}>Save preferences</button></div>
+        <div className="settings-card-footer"><span>Changing language starts fresh. Previous conversations stay in Journal.</span><button className="button button-small" onClick={()=>void savePreferences()} disabled={busy||preferencesDisabled}>Save preferences</button></div>
       </section>
 
       <section className="settings-card"><div className="settings-card-heading"><span className="settings-icon">◉</span><div><h2>AI provider</h2><p>Choose exactly where text requests go. Credentials stay on your server.</p></div></div>
