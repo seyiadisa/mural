@@ -33,6 +33,9 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 RUN chmod 0755 /usr/bin/caddy && test -x /usr/bin/caddy
+USER node
+RUN /usr/bin/caddy version
+USER root
 COPY --from=api-production-dependencies --chown=node:node /workspace/services/api/node_modules ./services/api/node_modules
 COPY --from=api-build --chown=node:node /workspace/services/api/package.json ./services/api/package.json
 COPY --from=api-build --chown=node:node /workspace/services/api/dist ./services/api/dist
