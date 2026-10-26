@@ -1,22 +1,21 @@
 # Session Handoff
 
 ## Last Completed Task
-- Replaced the Render Caddy runtime with Fastify serving the built SPA and API from the same origin. Added the Render-only `MURAL_TRUST_RENDER_EDGE=true` gate for `CF-Connecting-IP`, same-origin security headers, static-file traversal checks, SPA fallback, and focused regression tests.
-- Commits `0a3824c` (`feat: serve web app from Fastify`) and `a73f741` (`fix: remove Caddy from Render runtime`) were pushed to `origin/main`. The previous local Caddy-diagnostic commit `16d35f0` was pushed with them.
-- Render Blueprint validation passed. Deployment `dep-dbfk1gbphbkc73agr3ig` is live on commit `a73f741fdd570930605551490ad7208e3cef7a62`.
-- Public checks passed: `/healthz`, Neon-backed `/readyz`, homepage, built JS asset, SPA fallback, JSON API 404, CSP/HSTS headers, and `/v1/auth/providers` (`google: true`). Hosted voice remains disabled.
-- The Render Docker build compiled the API and web app. `node --check infra/render/container-entrypoint.mjs` and `git diff --check` passed. Local Docker is unavailable; local pnpm checks could not open the user-level pnpm SQLite store, so the API unit suite was not run locally.
+- Created root SETUP.md at the user's explicit request. It is a beginner guide for a fresh, private, single-owner web installation: tools/fork, Neon pooled and direct URLs, Google Auth Platform, Render Blueprint and seven required variables, authorized origin and first owner login, local SIWC sign-in/import, model/language selection, backups/updates, voice scope, and troubleshooting.
+- Checked current repository configuration and official Render, Neon, Google, and OpenAI SIWC documentation. The guide uses placeholders only, requires matching owner/ChatGPT email, explains that laptop import writes encrypted credentials directly to Neon without SSH, and uses `pnpm run web-admin host-id` / `pnpm run web-admin import-siwc PATH` without the incorrect extra `--` in the older detailed guide.
+- Documentation checks passed: all seven render.yaml sync:false inputs are covered; local document links exist; code fences are balanced; no instance-specific account, service, or host identifiers occur. No application tests were needed for this documentation-only change. No production settings, credentials, databases, or services were modified.
 
 ## Current State
-- Render service `srv-dbee9d7b9u1s739e3vmg` is running one instance in Frankfurt at `https://mural-ygi6.onrender.com`. The live image serves the SPA and API directly from Fastify.
-- Neon remains in `eu-central-1`; no secrets or database credentials were changed. This patch contains no migration changes. `/readyz` returned `{ "database": true }`.
-- `MURAL_TRUST_RENDER_EDGE=true` is set by `render.yaml`; the API ignores `CF-Connecting-IP` unless that flag is enabled. `HOSTED_VOICE_EXPERIMENTAL=false` and `HOSTED_VOICE_LIFETIME_CAP_NANO=0` remain in effect.
-- The current deployment is the first successful Render image. Earlier Caddy images failed at runtime, so they are not a usable rollback target. Roll back with a reviewed code revert and new deploy if needed.
+- Branch main, HEAD/origin main 24406567fe90a213831c9ef616a082d5c400a098 after fetch. SETUP.md is new and uncommitted. Existing .agents docs-cache and QA evidence remain local; HANDOFF.md is updated. No new commits/pushes/deployments for this documentation task.
+- The prior authorized release IS live: Render deployment dep-dbfl4i2jnfac73etp44g on 24406567fe90a213831c9ef616a082d5c400a098, service srv-dbee9d7b9u1s739e3vmg in Frankfurt at https://mural-ygi6.onrender.com . Public health/readiness, Google provider availability, CSP/HSTS, and the new hashed web asset /assets/index-CMivI4AJ.js passed live verification. The asset includes the new language-switch text. Signed-in browser/model loading and deployed inference verification were not completed; the user declined Computer Use and asked to end that task.
+- Published code commits: f262d0b fixes SIWC missing Content-Type handling and model catalog parsing; 2440656 fixes web language selection/resume. Local API typecheck/build and six focused tests passed. Web typecheck/build and mocked browser language QA passed; evidence is in .agents/verification/language-switch-20261026/.
+- Encrypted pre-release database and Render service/environment backup retained at C:/Users/oluwa/AppData/Local/Mural/Backups/render-20261026T131303Z . database.dump.dpapi and render-config.json.dpapi use Windows DPAPI CurrentUser, with verified decryption and a restricted directory ACL. Restore needs the same Windows user's DPAPI profile. Previous image dep-dbfk3ucs728c73dlbt50 on 749e9e0 is the rollback reference. Hosted voice remains disabled; release added no migrations or grants.
 
 ## Next Task
-- Complete owner Google sign-in in the browser. It was not exercised interactively. Then import the laptop's SIWC credentials using the `web-admin` workflow in `docs/web-app.md`.
-- If testing code locally, restore pnpm's access to its package store or use a clean local dependency install; do not point database tests at Neon production.
+- The requested setup guide is ready for review. Commit/publish only if requested; avoid an unnecessary Render redeploy for documentation.
+- Read SETUP.md first for new-operator setup; docs/web-app.md retains detailed Docker Compose/provider/voice instructions. Current task does not authorize creating new external accounts, spending, changing secrets, or re-running setup against production.
 
 ## Open Issues
-- Interactive owner sign-in and SIWC import remain unverified. No OpenAI Live credentials are configured; voice stays intentionally paused.
-- The local API unit suite was not run because pnpm could not open its user-level SQLite store in the sandbox. The hosted image build and public route checks succeeded.
+- Older docs/web-app.md still shows `pnpm run web-admin -- ...`; the new guide documents the correct invocation. No unrelated documentation rewrite was made.
+- Prior signed-in production browser and full deployed chat verification remain uncompleted. Only one tiny SIWC live inference was authorized and used during diagnosis; additional automated live provider calls require separate authorization.
+- Temporary raw OAuth output remains at C:/Users/oluwa/AppData/Local/Temp/mural-siwc-01a17838/credentials.json. Never print or commit it; cleanup remains subject to the user's destructive-command approval rule.
