@@ -116,7 +116,8 @@ try {
     await waitForAPI(api);
     if (!stopping) {
       startupStage = 'reverse_proxy_start';
-      startChild('/usr/bin/caddy', ['run', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile'], {}, true, 'caddy');
+      startChild('/bin/sh', ['-c', 'exec "$@"', 'sh', '/usr/bin/caddy', 'run', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile'],
+        {}, true, 'caddy');
     }
   }
 } catch (error) {
