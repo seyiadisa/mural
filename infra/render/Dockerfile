@@ -1,5 +1,3 @@
-FROM caddy:2-alpine AS caddy
-
 FROM node:22-alpine AS api-build
 WORKDIR /workspace/services/api
 RUN corepack enable
@@ -28,21 +26,15 @@ ENV VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
 RUN pnpm run build
 
 FROM node:22-alpine AS runtime
-ENV NODE_ENV=production PORT=10000
+ENV NODE_ENV=production PORT=10000 MURAL_API_HOST=0.0.0.0 MURAL_WEB_ROOT=/app/web
 WORKDIR /app
 RUN apk add --no-cache ca-certificates
-COPY --from=caddy /usr/bin/caddy /usr/local/bin/caddy
-RUN chmod 0755 /usr/local/bin/caddy && test -x /usr/local/bin/caddy
-USER node
-RUN /usr/local/bin/caddy version
-USER root
 COPY --from=api-production-dependencies --chown=node:node /workspace/services/api/node_modules ./services/api/node_modules
 COPY --from=api-build --chown=node:node /workspace/services/api/package.json ./services/api/package.json
 COPY --from=api-build --chown=node:node /workspace/services/api/dist ./services/api/dist
 COPY --from=api-build --chown=node:node /workspace/services/api/migrations ./services/api/migrations
 COPY --from=web-build --chown=node:node /workspace/apps/web/dist ./web
 COPY --chown=node:node docs/web-app.md ./web/docs/web-app.md
-COPY --chown=node:node infra/render/Caddyfile /etc/caddy/Caddyfile
 COPY --chown=node:node infra/render/container-entrypoint.mjs ./infra/render/container-entrypoint.mjs
 USER node
 EXPOSE 10000

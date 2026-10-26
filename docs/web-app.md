@@ -4,7 +4,7 @@ The web client is a responsive React app served by the same HTTPS origin as the 
 
 ## Deploy on Render with Neon
 
-The Render deployment is one Docker Web Service. Caddy serves the React app and proxies API requests to Fastify within the same container, preserving same-origin cookies and the protected proxy headers. Render terminates public HTTPS. The container applies pending PostgreSQL migrations before starting the API and Caddy. Deployment files are in `infra/render/` and `render.yaml`.
+The Render deployment is one Docker Web Service. Fastify serves the built React app and API from the same process and origin, preserving same-origin cookies. Render terminates public HTTPS. The container applies pending PostgreSQL migrations before starting Fastify. Deployment files are in `infra/render/` and `render.yaml`.
 
 ### Before creating the Render service
 
@@ -19,7 +19,7 @@ The Render deployment is one Docker Web Service. Caddy serves the React app and 
    node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
    ```
 
-The Blueprint uses `RENDER_EXTERNAL_URL` for `PUBLIC_ORIGIN` and `MURAL_WEB_ORIGIN`, and reuses `GOOGLE_CLIENT_ID` for the browser build. Caddy listens on Render's `PORT` (default `10000`) and proxies API traffic to Fastify on loopback. Render's edge supplies `CF-Connecting-IP`; Caddy forwards it with the server-side proxy token ([Render client IP guidance](https://render.com/articles/host-pocketbase-on-render)).
+The Blueprint uses `RENDER_EXTERNAL_URL` for `PUBLIC_ORIGIN` and `MURAL_WEB_ORIGIN`, and reuses `GOOGLE_CLIENT_ID` for the browser build. Fastify listens on Render's `PORT` (default `10000`) and serves the SPA fallback plus static assets from `/app/web`. The Blueprint sets `MURAL_TRUST_RENDER_EDGE=true`, which allows network admission to use Render's edge-supplied `CF-Connecting-IP`; that header is ignored unless this flag is enabled ([Render client IP guidance](https://render.com/articles/host-pocketbase-on-render)).
 
 The default Blueprint uses Render's Free plan. Free web services sleep after 15 minutes without traffic, can take about a minute to wake, have an ephemeral filesystem, and are intended for hobby use rather than production. Mural stores data in Neon, not the container filesystem. Free services do not support pre-deploy commands or one-off jobs, so the container runs the idempotent migration runner on each start. See [Render's Free service limits](https://render.com/docs/free) and [Docker deploy documentation](https://render.com/docs/docker).
 

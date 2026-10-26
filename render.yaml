@@ -42,6 +42,8 @@ services:
         value: "true"
       - key: ACCOUNTS_ALLOW_LOCAL_LOOPBACK
         value: "false"
+      - key: MURAL_TRUST_RENDER_EDGE
+        value: "true"
       - key: HOSTED_VOICE_EXPERIMENTAL
         value: "false"
       - key: HOSTED_VOICE_ACCESS

@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process';
-import { setTimeout as delay } from 'node:timers/promises';
 
 const children = new Set();
 let stopping = false;
@@ -9,8 +8,6 @@ let startupStage = 'database_migrations';
 const knownFailureCodes = new Set([
   'migration_database_url_missing',
   'migration_process_failed',
-  'api_exited_before_ready',
-  'api_not_ready',
   'ENOENT',
   'EACCES',
   'EPERM',
@@ -79,27 +76,6 @@ async function applyMigrations() {
   if (result.code !== 0) throw startupFailure('migration_process_failed');
 }
 
-async function waitForAPI(child) {
-  const headers = {
-    'x-mural-proxy-token': process.env.ACCOUNTS_PROXY_TOKEN ?? '',
-    'x-mural-client-ip': '127.0.0.1',
-  };
-  for (let attempt = 0; attempt < 90 && !stopping; attempt += 1) {
-    if (child.exitCode !== null) throw startupFailure('api_exited_before_ready');
-    try {
-      const response = await fetch('http://127.0.0.1:8081/readyz', {
-        headers,
-        signal: AbortSignal.timeout(2_000),
-      });
-      if (response.ok) return;
-    } catch {
-      // The API can need a short time to finish its startup checks.
-    }
-    await delay(1_000);
-  }
-  if (!stopping) throw startupFailure('api_not_ready');
-}
-
 process.on('SIGTERM', () => stop(0));
 process.on('SIGINT', () => stop(0));
 
@@ -109,16 +85,7 @@ try {
   if (stopping) process.exitCode = exitCode;
   else {
     startupStage = 'api_start';
-    const api = startChild(process.execPath, ['/app/services/api/dist/src/main.js'], {
-      env: { ...process.env, PORT: '8081', MURAL_API_HOST: '127.0.0.1' },
-    }, true, 'api');
-    startupStage = 'api_readiness';
-    await waitForAPI(api);
-    if (!stopping) {
-      startupStage = 'reverse_proxy_start';
-      startChild('/bin/sh', ['-c', 'exec "$@"', 'sh', '/usr/local/bin/caddy', 'run', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile'],
-        {}, true, 'caddy');
-    }
+    startChild(process.execPath, ['/app/services/api/dist/src/main.js'], {}, true, 'api');
   }
 } catch (error) {
   if (!stopping) {

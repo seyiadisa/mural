@@ -1,6 +1,6 @@
 # Mural Project Knowledge Base
 
-**Snapshot:** `main` includes the private web app and the current Render deployment work; `origin/main` was fetched on 2026-10-24. The working tree was clean before the Render update. This is a navigation and context document, not a substitute for checking current source or production configuration.
+**Snapshot:** `main` includes the private web app and Render deployment configuration; checked on 2026-10-26. This is a navigation and context document, not a substitute for checking current source or production configuration.
 
 ## Mental model
 
@@ -116,9 +116,9 @@ Configuration is deliberately fail-closed. `services/api/.env.example`, `main.ts
 
 ### Hosted web app and API
 
-`apps/web/` is a React 19 + TypeScript + Vite single-page app. In production, Render runs one Docker Web Service with Caddy serving the built static app and proxying API paths to Fastify on loopback; the API's `MURAL_API_HOST` setting keeps its listener behind Caddy. Vite proxies API paths during local development. The web experience is owner-only through Google sign-in (`MURAL_WEB_OWNER_EMAIL`) and persists web conversations and vocabulary in the API's PostgreSQL database. The API's `/v1/web/*` routes are in `src/web-routes.ts`.
+`apps/web/` is a React 19 + TypeScript + Vite single-page app. In production, Render runs one Docker Web Service; Fastify serves the built static app and API from the same process and origin. `MURAL_WEB_ROOT` selects the static root, while Vite proxies API paths during local development. The web experience is owner-only through Google sign-in (`MURAL_WEB_OWNER_EMAIL`) and persists web conversations and vocabulary in the API's PostgreSQL database. The API's `/v1/web/*` routes are in `src/web-routes.ts`.
 
-The Render Blueprint and container files are `render.yaml` and `infra/render/`. Render's Free plan is the default, so the entrypoint applies pending migrations at every container start before launching the API and Caddy. Runtime data remains in Neon; no persistent container disk is required. The Blueprint pins Render to Frankfurt to match Neon `eu-central-1`; Render regions cannot be changed after service creation. `infra/gcp/` contains the earlier Cloud Run configuration and is retained as a rollback reference. The current deployment instructions are in `docs/web-app.md`.
+The Render Blueprint and container files are `render.yaml` and `infra/render/`. Render's Free plan is the default, so the entrypoint applies pending migrations at every container start before launching the API. `MURAL_TRUST_RENDER_EDGE=true` opts into Render's `CF-Connecting-IP` for client network admission; the API does not trust that header by default. Runtime data remains in Neon; no persistent container disk is required. The Blueprint pins Render to Frankfurt to match Neon `eu-central-1`; Render regions cannot be changed after service creation. `infra/gcp/` contains the earlier Cloud Run configuration and is retained as a rollback reference. The current deployment instructions are in `docs/web-app.md`.
 
 Text can use SIWC credentials imported from the user's laptop with `scripts/siwc-login.mjs` and the `web-admin` command, or an explicitly configured OpenAI-compatible endpoint. Provider secrets are encrypted with `MURAL_SECRETS_ENCRYPTION_KEY`. Hosted voice stays disabled unless the server has `OPENAI_API_KEY` and `HOSTED_VOICE_EXPERIMENTAL=true`; `MURAL_LIVE_MODEL` selects the Live model (default `gpt-live-1`). Web voice tracks up to 200 reserved/charged minutes per UTC calendar month at the checked-in $0.05/min rate, separately from an existing minute balance. This is an app-side time cap, not an OpenAI billing limit. Migration `036_private_web.sql` adds the web data and voice-period records. See `docs/web-app.md` before hosted deployment or self-hosting; local build verification does not establish that production configuration or deployment is ready.
 
@@ -176,7 +176,7 @@ The API's PostgreSQL integration tests require a separate disposable test databa
 - Use `docs/add-language.md` for language changes, `docs/run-on-iphone.md` / `docs/run-on-android.md` for setup, `docs/conversation-minutes.md` and `docs/manage-free-minutes.md` for funding semantics, and `services/api/README.md` plus `services/api/docs/` for server contracts/operations.
 - Use `release/` and `verification/` for evidence, but treat dated files as snapshots rather than current production state.
 - Several docs are stale relative to current code: `docs/android/design.md` describes eight modules and says background calls end, while current code registers 13 modules and `VoiceConversationService` supports background calls; `README.md`, `apps/android/README.md`, and the language architecture table also have outdated language-count claims or omit Dutch and Russian. Source registry and current implementation are authoritative; update the affected docs when making relevant product changes.
-- The Render Blueprint validated against Render on 2026-10-24. The Docker image built successfully with a verification-only Google client ID placeholder, and Caddy validated its production config. No service or live deployment exists yet; the Render Production environment has no services, and database/OAuth/owner/secrets configuration is not available. Docker build verified API and web production builds; no PostgreSQL integration or live sign-in checks were run.
+- A previous Render deployment failed because its runtime denied execution of Caddy. The current Render configuration serves the SPA directly from Fastify; verify the latest service state and deployment before making production claims. Local Docker build and hosted sign-in are separate checks.
 
 ## Fast entry points by task
 
