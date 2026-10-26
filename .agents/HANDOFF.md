@@ -1,25 +1,23 @@
 # Session Handoff
 
 ## Last Completed Task
-- Prepared and validated a Render Docker deployment for the private Mural web app, with Neon PostgreSQL.
-- Built local image `mural-render:verification`; API and web builds passed inside Docker, Caddy config validated, Render Blueprint validation succeeded.
-- Added a pnpm 11 `allowBuilds` policy for esbuild only, required for reproducible Docker builds.
-- Branch: `main`; commits `cecf22c` (Render implementation) and `da8f056` (deployment documentation) are pushed to `origin/main`.
+- Confirmed the Render Blueprint sync for `ed8fc1c` succeeded. The two resulting service deploys ended `update_failed`; Render currently reports no running instances.
+- Inspected the failed deploy logs: database migration printed `Mural schema ready`, the API emitted `service_started`, and `GET /readyz` returned 200 before the container exited with status 1. A separate `HEAD unmatched` request returned `trusted_proxy_required`; this does not establish the startup failure cause.
+- Added sanitized startup stage and failure-code logging in `infra/render/container-entrypoint.mjs`. It does not log raw exception messages or environment values. `node --check` and `git diff --check` passed.
+- Branch: `main`; the diagnostic change is pending commit and push.
 
 ## Current State
-- Render project: `Mural` (`prj-dbec94gm7kps73de22c0`); Production environment: `evm-dbec94gm7kps73de22cg`.
-- Render CLI confirms Production has no services or environment groups. No service or deployment has been created.
-- `render.yaml` passes live Blueprint validation and pins Render to Frankfurt to match Neon `eu-central-1`; this is set before service creation because Render does not allow changing a service's region later.
-- No Neon URLs, Google Web client ID, owner email, or app secrets are available in this checkout or Render Production.
-- The local Docker build used `VITE_GOOGLE_CLIENT_ID=render-verification-placeholder`; do not deploy that verification image. Render must build the source with the real OAuth client ID.
-- Hosted voice remains off (`HOSTED_VOICE_EXPERIMENTAL=false`, cap `0`); GPT-Live credentials are not needed for this deployment.
+- Render Blueprint `mural-blueprint` is synced to `seyiadisa/mural` on `main`; service ID `srv-dbee9d7b9u1s739e3vmg`, region Frankfurt, URL `https://mural-ygi6.onrender.com`.
+- Render project: `Mural` (`prj-dbec94gm7kps73de22c0`); Production environment: `evm-dbec94gm7kps73de22cg`. The CLI did not show this service attached to that environment.
+- Neon is in `eu-central-1`. The user reports entering the required settings directly in Render; never copy secrets into Git or chat.
+- Hosted voice remains off (`HOSTED_VOICE_EXPERIMENTAL=false`, lifetime cap `0`); GPT-Live credentials are not needed for this deployment.
 
 ## Next Task
-- Configure the Neon pooled/direct URLs, Google Web client ID, owner email, and three separate 64-character hex secrets directly in Render. Do not put secrets in chat or Git.
-- Create/sync the Blueprint in Mural Production, deploy, then verify `/healthz`, `/readyz`, owner sign-in, and sanitized logs.
+- Commit and push the sanitized startup diagnostics on `main`; inspect the resulting Render deploy log for the specific stage/code.
+- Resolve the failure, then verify `/healthz`, `/readyz`, owner sign-in, and sanitized logs.
 - After owner Google sign-in, import SIWC credentials from the laptop using the `web-admin` command documented in `docs/web-app.md`.
 
 ## Open Issues
-- No live service exists, so database migrations, readiness, and owner sign-in have not been tested against Render or Neon.
-- No PostgreSQL integration tests were run; the Docker build verifies production compilation only.
-- An earlier separate pnpm build watcher may still report its pre-fix result; the later Docker build successfully ran both API and web builds after the allowlist fix.
+- The Render service is not healthy and no running instance is reported.
+- The root cause of the container exit remains unknown; the current deployed entrypoint emits only a generic failure message.
+- Owner sign-in and the live Neon readiness path have not been verified end to end.
